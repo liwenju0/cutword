@@ -29,7 +29,7 @@ def normalize(text, maxlen=0, isolate_digits=False):
 class Tokenizer:
     """Unigram tokenizer with Aho-Corasick automaton
     """
-    def __init__(self, dict_path="./deepctrl_dict.txt", seed=None):
+    def __init__(self, dict_path="deepctrl_dict.txt", seed=None):
         self._pieces = {}
         for line in open(dict_path):
             line = line.strip()
