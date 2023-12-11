@@ -2,3 +2,5 @@
 dist/
 build/
 *pyc
+
+cutword.egg-info/
