@@ -1,7 +1,6 @@
 #! -*- coding: utf-8 -*-
 
 from setuptools import setup, find_packages
-from Cython.Build import cythonize
 
 setup(
     name='cutword',
@@ -16,7 +15,6 @@ setup(
     author_email='liwenjudetiankong@126.com',
     install_requires=['numpy', 'tqdm'],
     packages=find_packages(),
-    ext_modules=cythonize('cutword/*.pyx'),
-    package_data={'cutword': ['*.pyx']},
+    package_data={'cutword': ['*.txt']},
     include_package_data=True
 )

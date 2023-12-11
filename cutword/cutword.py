@@ -1,40 +1,25 @@
 # -*- coding: utf-8 -*-
 
-
 import numpy as np
-import re, json, unicodedata
-from itertools import chain
-from functools import partial
-from tqdm import tqdm, trange
-from base64 import b64encode, b64decode
-from multiprocessing import Pool, Queue
+import re
 import ahocorasick
-from . import faster
+import re
+import os
 
+re_han = re.compile("([\u4E00-\u9FD5]+)")
+re_skip = re.compile("([a-zA-Z0-9]+(?:\.\d+)?%?)")
 
-def normalize(text, maxlen=0, isolate_digits=False):
-    text = unicodedata.normalize('NFC', text)
-    if maxlen > 0:
-        if isolate_digits:
-            regex = '\d|[^\n\d]{,%d}\n{1,100}|[^\n\d]{1,%d}' % (maxlen, maxlen)
-        else:
-            regex = '.{,%d}\n{1,100}|.{1,%d}' % (maxlen, maxlen)
-    else:
-        if isolate_digits:
-            regex = '\d|[^\n\d]*\n+|[^\n\d]+'
-        else:
-            regex = '.*\n+|.+'
-    return [t.encode() for t in re.findall(regex, text)]
-
-class Tokenizer:
+root_path = os.path.dirname(os.path.realpath(__file__))
+class Cutter:
     """Unigram tokenizer with Aho-Corasick automaton
     """
-    def __init__(self, dict_path="deepctrl_dict.txt", seed=None):
+    def __init__(self, dict_name="dict.txt"):
+        dict_path = os.path.join(root_path, dict_name)
         self._pieces = {}
         for line in open(dict_path):
             line = line.strip()
             word, freq, pos = line.split()
-            self._pieces[word] = [int(freq), pos]
+            self._pieces[word] = [int(freq) + 1e-10, pos]
        
         # Aho-Corasick automaton
         log_total = np.log(sum([_[0] for _ in self._pieces.values()]))
@@ -42,26 +27,54 @@ class Tokenizer:
         for k, v in self._pieces.items():
             self._automaton.add_word(k, (len(k), np.log(v[0]) - log_total, v[1]))
         self._automaton.make_automaton()
-        self.set_seed(seed)
 
-    def set_seed(self, seed):
-        if seed is not None:
-            faster.set_seed(seed)
 
     def _tokenize(self, text):
-        return faster._tokenize(self, text)
+        inf = -1e10
+        scores = [0] + [inf] * len(text)
+        routes = list(range(len(text) + 1))
+        tokens = []
+        for e, (k, v, p) in self._automaton.iter(text):
+            s, e = e - k + 1, e + 1
+            if scores[s] == inf:
+                #word not include in dict
+                last = s
+                while scores[last] == inf and last > 0:
+                    last -= 1
+                scores[s] = scores[last] -10 #punish score 
+                routes[s] = last
+                   
+            score = scores[s] + v
+            if score > scores[e]:
+                scores[e], routes[e] = score, s
 
-    def tokenize(self, text, iter=False):
-        pieces = chain(*(self._tokenize(t) for t in normalize(text)))
-        if iter:
-            return pieces
-        return list(pieces)
+        if e < len(text):
+            tokens.append(text[e:])
+            text = text[:e]
 
+        while text:
+            s = routes[e]
+            tokens.append(text[s:e])
+            text, e = text[:s], s
+        return tokens[::-1]
+
+    def cutword(self, text):
+        res = []
+        blocks = re_han.split(text)
+        for blk in blocks:
+            if re_han.match(blk):
+                res.extend(self._tokenize(blk))
+            else:
+                tmp = re_skip.split(blk)
+                tmp = [i for i in tmp if i]
+                res.extend(tmp)
+        return res
+        
 
 if __name__ == "__main__":
-    tokenizer = Tokenizer()
-    text = "今天真高兴啊"
-    res = tokenizer.tokenize(text)
+    tokenizer = Cutter()
+    text = "小明硕士毕业于中国科学院计算所，后在日本京都大学深造"
+    res = tokenizer.cutword(text)
     print(res)
 
 
