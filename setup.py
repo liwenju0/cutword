@@ -13,7 +13,7 @@ setup(
     url='https://github.com/liwenju0/cutword',
     author='liwenju',
     author_email='liwenjudetiankong@126.com',
-    install_requires=['numpy', 'tqdm'],
+    install_requires=['numpy', 'tqdm', 'pyahocorasick'],
     packages=find_packages(),
     package_data={'cutword': ['*.txt']},
     include_package_data=True
