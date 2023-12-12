@@ -25,6 +25,21 @@ res = cutter.cutword("你好，世界")
 print(res)
 
 ```
+本分词器提供两种词典库，一种是基本的词库，默认加载。一种是升级词库，升级词库总体长度会比基本词库更长一点。
+
+如需要加载升级词库，需要将 want_long_word 设为True
+```python
+from  cutword import Cutter
+
+cutter = Cutter()
+res = cutter.cutword("精诚所至，金石为开")
+print(res) # ['精诚', '所', '至', '，', '金石为开']
+
+cutter = Cutter(want_long_word=True)
+res = cutter.cutword("精诚所至，金石为开")
+print(res) # ['精诚所至', '，', '金石为开']
+
+```
 
 # TODO
 添加命名实体识别功能

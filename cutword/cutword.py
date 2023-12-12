@@ -17,6 +17,7 @@ class Cutter:
             self, 
             dict_name="dict.txt", 
             union_name="unionwords.txt",
+            want_long_word=False,
             custom_dict_path=None
         ):
         '''
@@ -34,8 +35,9 @@ class Cutter:
         dict_path = os.path.join(root_path, dict_name)
         self._pieces = {}
         self._load_dict(dict_path)
-        union_path = os.path.join(root_path, union_name)
-        self._load_dict(union_path)
+        if want_long_word:
+            union_path = os.path.join(root_path, union_name)
+            self._load_dict(union_path)
         if custom_dict_path:
             if not os.path.exists(custom_dict_path):
                 raise Exception("custom dict path not exists: %s" % custom_dict_path)
@@ -109,7 +111,7 @@ class Cutter:
 
 if __name__ == "__main__":
     tokenizer = Cutter()
-    text = "小明来到中国科学院进修"
+    text = "精诚所至，金石为开"
     res = tokenizer.cutword(text)
     print(res)
 
