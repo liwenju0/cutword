@@ -28,3 +28,7 @@ print(res)
 
 # TODO
 添加命名实体识别功能
+
+## Star History
+
+![Star History Chart](https://api.star-history.com/svg?repos=liwenju0/cutword&type=Date)

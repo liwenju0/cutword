@@ -19,7 +19,7 @@ def profile():
     times = 100000
     now = time.time()
     for i in range(times):
-        jieba.lcut(text)
+        jieba.lcut(text, HMM=False)
     print("jieba", time.time() - now)
     now = time.time()
     for i in range(times):

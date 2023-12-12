@@ -41,7 +41,7 @@ class Cutter:
                 last = s
                 while scores[last] == inf and last > 0:
                     last -= 1
-                scores[s] = scores[last] -10 #punish score 
+                scores[s] = scores[last] - 10 #punish score 
                 routes[s] = last
                    
             score = scores[s] + v
@@ -58,7 +58,7 @@ class Cutter:
             text, e = text[:s], s
         return tokens[::-1]
 
-    def cutword(self, text):
+    def cutword(self, text, return_pos=False):
         res = []
         blocks = re_han.split(text)
         for blk in blocks:
@@ -73,7 +73,7 @@ class Cutter:
 
 if __name__ == "__main__":
     tokenizer = Cutter()
-    text = "小明硕士毕业于中国科学院计算所，后在日本京都大学深造"
+    text = "张家口市民王北京如是说"
     res = tokenizer.cutword(text)
     print(res)
 
