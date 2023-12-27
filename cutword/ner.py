@@ -11,7 +11,9 @@ from model.model_ner import LstmNerModel
 import collections
 from typing import List
 import cutword
+import os
 
+root_path = os.path.dirname(os.path.realpath(__file__))
 
 @dataclass
 class NERInputItem:
@@ -54,8 +56,14 @@ class NERResult:
 
 class NER(object):
     def __init__(self, device, model_path=None, preprocess_data_path=None):
-        self.model_path = model_path if model_path else 'cutword/cutword/model_params.pth'
-        self.preprocess_data_path = preprocess_data_path if preprocess_data_path else 'cutword/cutword/preprocess_data_final.json'
+        if model_path is None:
+            self.model_path = os.path.join(root_path, 'model_params.pth')
+        else:
+            self.model_path = model_path 
+        if preprocess_data_path is None:
+            self.preprocess_data_path = os.path.join(root_path, 'preprocess_data_final.json')
+        else:
+            self.preprocess_data_path = preprocess_data_path 
         self.device = device
         
         with open(self.preprocess_data_path, 'r', encoding='utf-8') as f:
@@ -402,7 +410,8 @@ class NER(object):
     
 if __name__ == '__main__':
     
-    
+    print(root_path)
+
     model_path = '/data/cutword/cutword/model_params.pth'
     processed_data = '/data/cutword/cutword/preprocess_data_final.json'
     device = torch.device('cpu')
