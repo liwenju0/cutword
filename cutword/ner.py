@@ -53,11 +53,12 @@ class NERResult:
 
 
 class NER(object):
-    def __init__(self, model_path, device, preprocess_data_path):
-        self.model_path = model_path
+    def __init__(self, device, model_path=None, preprocess_data_path=None):
+        self.model_path = model_path if model_path else 'cutword/cutword/model_params.pth'
+        self.preprocess_data_path = preprocess_data_path if preprocess_data_path else 'cutword/cutword/preprocess_data_final.json'
         self.device = device
         
-        with open(preprocess_data_path, 'r', encoding='utf-8') as f:
+        with open(self.preprocess_data_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     
         self.id2char = data['id2char']
@@ -271,7 +272,7 @@ class NER(object):
         for input_str in input_str_list:
             
             words = self.cutword.cutword(input_str)
-            print(words)
+            # print(words)
             input_list = []
             for word in words:
                 word = word.lower()
@@ -402,15 +403,14 @@ class NER(object):
 if __name__ == '__main__':
     
     
-    model_path = 'cutword/cutword/model_params.pth'
-    processed_data = 'cutword/cutword/preprocess_data_final.json'
+    model_path = '/data/cutword/cutword/model_params.pth'
+    processed_data = '/data/cutword/cutword/preprocess_data_final.json'
     device = torch.device('cpu')
     ner_model = NER(model_path=model_path, device=device, preprocess_data_path=processed_data)
-    sentence = '在江苏下辖的13太保中，大型民航运输机场有南京禄口国际机场、无锡硕放机场、 常州奔牛国际机场、\n徐州观音国际机场、南通兴东国际机场、扬州泰州国际机场、连云港花果山国际机场、盐城南洋国际机场、淮安涟水国际机场。涉及到了10个城市，只有苏州、镇江、宿迁三个城市没有自己冠名的大型民航运输机场。镇江、宿迁没有，还情有可原，毕竟这样体量的城市，没有机场的还有一大把，但苏州没有不应该。'
-    input = NERInput([NERInputItem(sent=sentence)])
+    sentence_list = []
+    a = '在江苏下辖的13太保中，大型民航运输机场有南京禄口国际机场、无锡硕放机场、 常州奔牛国际机场、\n徐州观音国际机场、南通兴东国际机场、扬州泰州国际机场、连云港花果山国际机场、盐城南洋国际机场、淮安涟水国际机场。涉及到了10个城市，只有苏州、镇江、宿迁三个城市没有自己冠名的大型民航运输机场。镇江、宿迁没有，还情有可原，毕竟这样体量的城市，没有机场的还有一大把，但苏州没有不应该。'
+    for _ in range(10):
+        sentence_list.append(NERInputItem(sent=a))
+    input = NERInput(input=sentence_list)
     result = ner_model.batch_preidct(input)
-    print(result.results[0].result)
-    for item in result.results[0].result:
-        begin = item['begin']
-        end = item['end']
-        print("pre:", item['str'], ' true:', sentence[begin:end])
+    print(result)
