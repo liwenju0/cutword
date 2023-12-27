@@ -55,7 +55,7 @@ class NERResult:
 
 
 class NER(object):
-    def __init__(self, device, model_path=None, preprocess_data_path=None):
+    def __init__(self, device=None, model_path=None, preprocess_data_path=None):
         if model_path is None:
             self.model_path = os.path.join(root_path, 'model_params.pth')
         else:
@@ -64,7 +64,11 @@ class NER(object):
             self.preprocess_data_path = os.path.join(root_path, 'preprocess_data_final.json')
         else:
             self.preprocess_data_path = preprocess_data_path 
-        self.device = device
+        if device is None:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        else:
+            self.device = device
+
         
         with open(self.preprocess_data_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
