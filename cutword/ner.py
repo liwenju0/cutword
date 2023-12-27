@@ -7,7 +7,7 @@ lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import random
 import json
-from model.model_ref import LstmNerModel
+from model.model_ner import LstmNerModel
 import collections
 from typing import List
 import cutword
