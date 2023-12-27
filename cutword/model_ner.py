@@ -1,22 +1,36 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from torch import nn, optim
+from torch import nn
 from torchcrf import CRF
 
-from transformers import RobertaModel
 
 
 class LstmNerModel(nn.Module):
-    def __init__(self, embedding_size=256, num_tags=41,
-                 vocab_size=3675, hidden_size=128,
-                 batch_first=True, dropout=0.1):
+    def __init__(
+            self, 
+            embedding_size=256, 
+            num_tags=41,
+            vocab_size=3675, 
+            hidden_size=128,
+            batch_first=True, 
+            dropout=0.1
+            ):
         super(LstmNerModel, self).__init__()
         self.batch_first = batch_first
-        self.embedding = nn.Embedding(vocab_size, embedding_size, dtype=torch.float32)
+        self.embedding = nn.Embedding(
+            vocab_size, 
+            embedding_size, 
+            dtype=torch.float32
+        )
 
-        self.lstm = nn.LSTM(embedding_size, hidden_size // 2,
-                            num_layers=2, batch_first=True,
-                            bidirectional=True, dropout=dropout)
+        self.lstm = nn.LSTM(
+            embedding_size, 
+            hidden_size // 2,
+            num_layers=2, 
+            batch_first=True,
+            bidirectional=True, 
+            dropout=dropout
+        )
         for name, param in self.lstm.named_parameters():
             if name.startswith("weight"):
                 nn.init.xavier_normal_(param)

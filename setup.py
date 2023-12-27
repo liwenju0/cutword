@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cutword',
-    version='0.0.4',
+    version='0.0.5',
     python_requires='>=3',
     description='Just Cut Word Faster',
     long_description=open('README.md', encoding="utf-8").read(),
@@ -15,6 +15,6 @@ setup(
     author_email='liwenjudetiankong@126.com',
     install_requires=['numpy', 'tqdm', 'pyahocorasick'],
     packages=find_packages(),
-    package_data={'cutword': ['*.txt']},
+    package_data={'cutword': ['*.txt', '*.json', '*.pth']},
     include_package_data=True
 )

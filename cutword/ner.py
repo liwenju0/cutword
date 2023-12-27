@@ -5,12 +5,10 @@ from torch.nn.utils.rnn import pad_sequence
 '''
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
-import random
 import json
-from model.model_ner import LstmNerModel
-import collections
+from .model_ner import LstmNerModel
+from .cutword import Cutter
 from typing import List
-import cutword
 import os
 
 root_path = os.path.dirname(os.path.realpath(__file__))
@@ -57,31 +55,39 @@ class NERResult:
 class NER(object):
     def __init__(self, device=None, model_path=None, preprocess_data_path=None):
         if model_path is None:
-            self.model_path = os.path.join(root_path, 'model_params.pth')
+            self._model_path = os.path.join(root_path, 'model_params.pth')
         else:
-            self.model_path = model_path 
+            self._model_path = model_path 
         if preprocess_data_path is None:
-            self.preprocess_data_path = os.path.join(root_path, 'preprocess_data_final.json')
+            self._preprocess_data_path = os.path.join(root_path, 'preprocess_data_final.json')
         else:
-            self.preprocess_data_path = preprocess_data_path 
+            self._preprocess_data_path = preprocess_data_path 
         if device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
-            self.device = device
+            self._device = device
 
         
-        with open(self.preprocess_data_path, 'r', encoding='utf-8') as f:
+        with open(self._preprocess_data_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
     
-        self.id2char = data['id2char']
-        self.char2id = data['char2id']
-        self.label2id = data['label2id']
-        self.id2label = {k: v for v, k in self.label2id.items()}
-        self.cutword = cutword.Cutter()
-        self.init_model()
-    def init_model(self):
-        model = LstmNerModel(embedding_size=256, hidden_size=128, vocab_size=len(self.char2id), num_tags=len(self.label2id))
-        checkpoint = torch.load(self.model_path)
+        self._id2char = data['id2char']
+        self._char2id = data['char2id']
+        self._label2id = data['label2id']
+        self._id2label = {k: v for v, k in self._label2id.items()}
+        self._cutword = Cutter()
+        self.__init_model()
+    def __init_model(self):
+        model = LstmNerModel(
+            embedding_size=256, 
+            hidden_size=128, 
+            vocab_size=len(self._char2id), 
+            num_tags=len(self._label2id)
+        )
+        checkpoint = torch.load(
+            self._model_path, 
+            map_location=self._device
+        )
 
         # 初始化模型和优化器
 
@@ -96,11 +102,11 @@ class NER(object):
         else:
             model.load_state_dict(checkpoint['model_state_dict'])
             
-        model = model.to(self.device)
-        self.model = model
-        self.model.eval()
+        model = model.to(self._device)
+        self._model = model
+        self._model.eval()
         
-    def cut_sentences(self, para, drop_empty_line=True, strip=False, deduplicate=False):
+    def __cut_sentences(self, para, drop_empty_line=True, strip=False, deduplicate=False):
         '''cut_sentences
         :param para: 输入文本
         :param drop_empty_line: 是否丢弃空行
@@ -128,7 +134,7 @@ class NER(object):
             sentences = [sent for sent in sentences if len(sent.strip()) > 0]
         return sentences
         
-    def digit_alpha_map(self, text):
+    def __digit_alpha_map(self, text):
         digit_and_alpha_map = {
             '１':'1',
             '２':'2',
@@ -200,10 +206,10 @@ class NER(object):
             else:
                 new_words.append(char)
         return ''.join(new_words)
-    def is_digit(self, text):
+    def _is_digit(self, text):
         return text.isdigit()
     
-    def is_hanzi(self, text):
+    def _is_hanzi(self, text):
         """
         判断序列是否为英文
 
@@ -219,14 +225,14 @@ class NER(object):
             return False
         
 
-    def is_english(self, text):
+    def _is_english(self, text):
         pattern1 = re.compile(r"^[A-Za-z]+$")
         if re.match(pattern1, text):
             return True
         else:
             return False
     
-    def is_special_token(self, text):
+    def __is_special_token(self, text):
         pattern1 = re.compile(r"^[A-Za-z]+$")
         pattern2 = re.compile(r"^[A-Za-z0-9]+$")
         pattern3 = re.compile(r"^[0-9]+$")
@@ -238,57 +244,70 @@ class NER(object):
             return False
         
 
-    
-    def batch_preidct(self, input_list: NERInput):
-        results = []
-        for item in input_list.input:
-            sent = item.sent
-            result = self.single_preidct(item)
-            results.append(NERResultItem(sent, result))
-        ner_result = NERResult(results)
-        return ner_result
+    def __make_input(self, text: str):
+        return NERInputItem(sent=text)
+
     
     
-    def single_preidct(self, item: NERInputItem):
-        text = item.sent
-        input_list = self.cut_sentences(text)
-        input_tensors, seq_lens, input_lists = self.encode(input_list)
-        result = self.predict_tags(input_tensors, seq_lens, input_lists, text)
-        return result
+    def predict(self, texts:'str|list'):
+        if not texts:
+            return []
+        if isinstance(texts, list) and all(not a for a in texts):
+            return []
+        
+        if isinstance(texts, str):
+            texts = [texts]
+
+        res = []
+        for text in texts:
+            item = self.__make_input(text)
+            text = item.sent
+            input_list = self.__cut_sentences(text)
+            input_tensors, seq_lens, input_lists = self.__encode(
+                input_list
+            )
+            result = self.__predict_tags(
+                input_tensors, 
+                seq_lens, 
+                input_lists, 
+                text
+            )
+            res.append(result)
+        return res
     
     
     
     
-    def predict_tags(self, input_tensor, seq_lens, input_lists, text):
+    def __predict_tags(self, input_tensor, seq_lens, input_lists, text):
         with torch.no_grad():
-            input_tensor = input_tensor.to(self.device)
-            output_fc, mask = self.model(input_tensor, seq_lens)
-            predict_tags = self.model.crf.decode(output_fc, mask)
+            input_tensor = input_tensor.to(self._device)
+            output_fc, mask = self._model(input_tensor, seq_lens)
+            predict_tags = self._model.crf.decode(output_fc, mask)
             # print_tag = 0
             # target_tag = random.randint(0, len(true_tags)-1)
             results = []
 
             chars_len = 0
             for pre, chars in zip(predict_tags, input_lists):
-                pre = [self.id2label[t] for t in pre]
-                pre_result = self.decode_prediction(chars, pre, chars_len, text)
+                pre = [self._id2label[t] for t in pre]
+                pre_result = self.__decode_prediction(chars, pre, chars_len, text)
                 results.extend(pre_result)
                 chars_len += len(chars)
                 
             return results
         
-    def encode(self, input_str_list: NERInput):
+    def __encode(self, input_str_list: NERInput):
         input_tensors = []
         seq_lens = []
         input_lists = []
         for input_str in input_str_list:
             
-            words = self.cutword.cutword(input_str)
+            words = self._cutword.cutword(input_str)
             # print(words)
             input_list = []
             for word in words:
                 word = word.lower()
-                word = self.digit_alpha_map(word)
+                word = self.__digit_alpha_map(word)
                 if word.strip() == '':
                     for _ in range(len(word.strip())):
                         input_list.append('[SEP]')
@@ -301,17 +320,17 @@ class NER(object):
             for char in input_list:
                 if char == '[SEP]':
                     continue
-                if self.char2id.get(char):
-                    input_tensor.append(self.char2id[char])
+                if self._char2id.get(char):
+                    input_tensor.append(self._char2id[char])
                 else:
-                    if self.is_digit(char):
-                        input_tensor.append(self.char2id['[NUMBER]'])
-                    elif self.is_special_token(char):
-                        input_tensor.append(self.char2id['[EWORD]'])
-                    elif self.is_hanzi(char):
-                        input_tensor.append(self.char2id['[HANZI]'])
+                    if self._is_digit(char):
+                        input_tensor.append(self._char2id['[NUMBER]'])
+                    elif self.__is_special_token(char):
+                        input_tensor.append(self._char2id['[EWORD]'])
+                    elif self._is_hanzi(char):
+                        input_tensor.append(self._char2id['[HANZI]'])
                     else:
-                        input_tensor.append(self.char2id['[UNK]'])
+                        input_tensor.append(self._char2id['[UNK]'])
                 
             seq_len = len(input_tensor)
 
@@ -321,7 +340,7 @@ class NER(object):
         input_tensors = pad_sequence(input_tensors, batch_first=True, padding_value=0)
         return torch.tensor(input_tensors), torch.tensor(seq_lens), input_lists
                 
-    def decode_prediction(self, chars, tags, chars_len, text):
+    def __decode_prediction(self, chars, tags, chars_len, text):
         new_chars = []
         for char in chars:
             if char == '[SEP]':
