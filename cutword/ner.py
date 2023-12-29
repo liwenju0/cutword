@@ -6,13 +6,33 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from .model_ner import LstmNerModel
-from .cutword import Cutter
+from model_ner import LstmNerModel
+from cutword import Cutter
 from typing import List
 import os
+import math
+from tqdm import tqdm
+
+try:
+    from opencc import OpenCC
+    s2t_converter = OpenCC('s2t')
+    t2s_converter = OpenCC('t2s')
+
+    def s2t(text: str) -> str:
+        return s2t_converter.convert(text)
+
+    def t2s(text: str) -> str:
+        return t2s_converter.convert(text)
+except Exception as e:
+    print("opencc 初始化失败！项目将没有繁简转化功能", e)
+    def s2t(text: str) -> str:
+        return text
+
+    def t2s(text: str) -> str:
+        return text
 
 root_path = os.path.dirname(os.path.realpath(__file__))
-
+re_han_split = re.compile(r"([\u4E00-\u9Fa5a-zA-Z0-9+#&【】《》<>（）()〔﹝\[﹞〕\]“”\"]+)", re.U)
 @dataclass
 class NERInputItem:
     sent: str = ""
@@ -23,6 +43,22 @@ class NERInputItem:
     }
     
 @dataclass
+class NERItem:
+    entity: str = ''
+    begin: int = -1
+    end: int = -1
+    ner_type_en: str = ''
+    ner_type_zh: str = ''
+    
+    __annotations__ = {
+        'entity':str,
+        'begin': int, 
+        'end': int, 
+        'ner_type_en': str,
+        'ner_type_zh': str
+    }
+    
+@dataclass
 class NERInput:
     input: List[NERInputItem]
     
@@ -30,6 +66,8 @@ class NERInput:
     __annotations__ = {
         'input': List[NERInputItem]
     }
+
+
 
 
 @dataclass
@@ -53,7 +91,7 @@ class NERResult:
 
 
 class NER(object):
-    def __init__(self, device=None, model_path=None, preprocess_data_path=None):
+    def __init__(self, device=None, model_path=None, preprocess_data_path=None, max_batch_size=128):
         if model_path is None:
             self._model_path = os.path.join(root_path, 'model_params.pth')
         else:
@@ -75,8 +113,10 @@ class NER(object):
         self._char2id = data['char2id']
         self._label2id = data['label2id']
         self._id2label = {k: v for v, k in self._label2id.items()}
+        self._label_en2zh = data['en2zh']
         self._cutword = Cutter()
         self.__init_model()
+        self.max_batch_size = max_batch_size
     def __init_model(self):
         model = LstmNerModel(
             embedding_size=256, 
@@ -106,7 +146,26 @@ class NER(object):
         self._model = model
         self._model.eval()
         
-    def __cut_sentences(self, para, drop_empty_line=True, strip=False, deduplicate=False):
+    def __split_2_short_text(self, sent, max_len=126):
+        if not sent:
+            return []
+        if len(sent) <= max_len:
+            return [sent]
+        sents = re_han_split.split(sent)
+        res_sents = []
+        cur = ""
+        for s in sents:
+            if len(cur+s) <= max_len:
+                cur += s 
+            else:
+                res_sents.append(cur)
+                cur = s
+        if cur:
+            res_sents.append(cur)
+
+        return res_sents
+        
+    def __cut_sentences(self, para, drop_empty_line=True, strip=True, deduplicate=False, split_2_short=False, max_len=256, need_clean=False):
         '''cut_sentences
         :param para: 输入文本
         :param drop_empty_line: 是否丢弃空行
@@ -114,9 +173,12 @@ class NER(object):
         :param deduplicate: 是否对连续标点去重，帮助对连续标点结尾的句子分句
         :return: sentences: list of str
         '''
+        if para is None or len(para) == 0:
+            return []
+                
         if deduplicate:
             para = re.sub(r"([。！？\!\?;；])\1+", r"\1", para)
-
+        para = re.sub(r'\s+', '\n', para)
         para = re.sub(r'([。！？\?!])([^”’])', r"\1\n\2", para)  # 单字符断句符
         para = re.sub(r'(\.{3,6})([^”’])', r"\1\n\2", para)  # 英文省略号
         para = re.sub(r'(\…{2})([^”’])', r"\1\n\2", para)  # 中文省略号
@@ -132,7 +194,45 @@ class NER(object):
             sentences = [sent.strip() for sent in sentences]
         if drop_empty_line:
             sentences = [sent for sent in sentences if len(sent.strip()) > 0]
-        return sentences
+
+        if not split_2_short:
+            return sentences
+        
+        assert max_len > 0, f"max_len must be set to a positive integer, got {max_len}"
+        
+        short_sents = []
+        for sent in sentences:
+            s_sents = self.__split_2_short_text(sent, max_len)
+            short_sents.extend(s_sents)
+        return short_sents
+        
+    # def __cut_sentences(self, para, drop_empty_line=True, strip=False, deduplicate=False):
+    #     '''cut_sentences
+    #     :param para: 输入文本
+    #     :param drop_empty_line: 是否丢弃空行
+    #     :param strip: 是否对每一句话做一次strip
+    #     :param deduplicate: 是否对连续标点去重，帮助对连续标点结尾的句子分句
+    #     :return: sentences: list of str
+    #     '''
+    #     if deduplicate:
+    #         para = re.sub(r"([。！？\!\?;；])\1+", r"\1", para)
+
+    #     para = re.sub(r'([。！？\?!])([^”’])', r"\1\n\2", para)  # 单字符断句符
+    #     para = re.sub(r'(\.{3,6})([^”’])', r"\1\n\2", para)  # 英文省略号
+    #     para = re.sub(r'(\…{2})([^”’])', r"\1\n\2", para)  # 中文省略号
+    #     para = re.sub(r'([。！？\?!][”’])([^，。！？\?])', r'\1\n\2', para)
+    #     # 去掉分号断句，因为可能引发语法检测的误报，
+    #     # 比如这句：彭涛说，小时候，自己梦想走出大山；一年支教，让自己又回到了大山；和孩子们相处一年，自己未来多了几分扎根大山的打算。
+    #     # 一年支教，让自己又回到了大山；这句话会引发成分缺失的误报
+    #     # para = re.sub(r'([;；])([^，。！？\?])', r'\1\n\2', para) 
+    #     # 如果双引号前有终止符，那么双引号才是句子的终点，把分句符\n放到双引号后，注意前面的几句都小心保留了双引号
+    #     para = para.rstrip()  # 段尾如果有多余的\n就去掉它
+    #     sentences = para.split("\n")
+    #     if strip:
+    #         sentences = [sent.strip() for sent in sentences]
+    #     if drop_empty_line:
+    #         sentences = [sent for sent in sentences if len(sent.strip()) > 0]
+    #     return sentences
         
     def __digit_alpha_map(self, text):
         digit_and_alpha_map = {
@@ -245,7 +345,26 @@ class NER(object):
         
 
     def __make_input(self, text: str):
+    
         return NERInputItem(sent=text)
+    
+    
+    def __make_batch(self, input_tensors, seq_lens):
+        
+        if len(seq_lens) <= self.max_batch_size:
+            return [input_tensors], [seq_lens]
+        else:
+            num_batch = math.ceil(len(seq_lens) / self.max_batch_size)
+            temp_batch_input_tensors = []
+            temp_batch_seq_lens = []
+
+            for i in range(num_batch):
+                start = i * self.max_batch_size
+                end = min((i + 1) * self.max_batch_size, len(seq_lens))
+                temp_batch_input_tensors.append(input_tensors[start:end])
+                temp_batch_seq_lens.append(seq_lens[start:end])
+
+            return temp_batch_input_tensors, temp_batch_seq_lens
 
     
     
@@ -258,45 +377,80 @@ class NER(object):
         if isinstance(texts, str):
             texts = [texts]
 
-        res = []
-        for text in texts:
+        
+        sentence_id = []
+        input_lists = []
+        for idx, text in enumerate(texts):
             item = self.__make_input(text)
             text = item.sent
+            text = t2s(text)
             input_list = self.__cut_sentences(text)
-            input_tensors, seq_lens, input_lists = self.__encode(
-                input_list
+            input_lists.extend(input_list)
+            sentence_id.extend([idx]*len(input_list))
+            
+        input_tensors, seq_lens, input_lists = self.__encode(input_lists)
+        input_tensors_batched_list, seq_lens_batched_list = self.__make_batch(
+            input_tensors, seq_lens)
+        predict_tags_all = []
+        for input_tensors_batched, seq_lens_batched in zip(input_tensors_batched_list, seq_lens_batched_list):
+            
+            predict_tags = self.__get_model_output(
+                input_tensors_batched, 
+                seq_lens_batched,
             )
-            result = self.__predict_tags(
-                input_tensors, 
-                seq_lens, 
-                input_lists, 
-                text
-            )
-            res.append(result)
+            predict_tags_all.extend(predict_tags)
+        res = self.__predict_tags(predict_tags_all, input_lists, texts, sentence_id)
+        
         return res
     
     
-    
-    
-    def __predict_tags(self, input_tensor, seq_lens, input_lists, text):
+    def __get_model_output(self, input_tensor, seq_lens):
         with torch.no_grad():
             input_tensor = input_tensor.to(self._device)
             output_fc, mask = self._model(input_tensor, seq_lens)
-            predict_tags = self._model.crf.decode(output_fc, mask)
-            # print_tag = 0
-            # target_tag = random.randint(0, len(true_tags)-1)
-            results = []
 
-            chars_len = 0
-            for pre, chars in zip(predict_tags, input_lists):
+            predict_tags = self._model.crf.decode(output_fc, mask)
+        return predict_tags
+        
+    
+    
+    def __predict_tags(self, predict_tags_all, input_lists, texts, sentence_id):
+        
+
+        pre_idx = None
+        results = []
+        result = []
+        chars_len = 0
+        for i in range(len(sentence_id)):
+            
+            pre = predict_tags_all[i]
+            # pre = pre.cpu().tolist()
+            chars = input_lists[i]
+            idx = sentence_id[i]
+            text = texts[idx]
+            if idx == pre_idx:
+            
+            # for pre, chars in zip(predict_tags, input_lists):
                 pre = [self._id2label[t] for t in pre]
                 pre_result = self.__decode_prediction(chars, pre, chars_len, text)
-                results.extend(pre_result)
+                result.extend(pre_result)
                 chars_len += len(chars)
+            else:
+                if pre_idx is not None:
+                    results.append(result)
+                pre_idx = idx
                 
-            return results
+                pre = [self._id2label[t] for t in pre]
+                pre_result = self.__decode_prediction(chars, pre, chars_len, text)
+                result = pre_result
+                chars_len =  len(chars)
+            
+            
+        if result:
+            results.append(result) 
+        return results
         
-    def __encode(self, input_str_list: NERInput):
+    def __encode(self, input_str_list: List[str]):
         input_tensors = []
         seq_lens = []
         input_lists = []
@@ -349,12 +503,7 @@ class NER(object):
                 new_chars.append(char)
         assert len(new_chars) == len(tags), "{}{}".format(new_chars, tags)
         result = []
-        temp = {
-            'str':'',
-            'begin':-1,
-            'end':-1,
-            'type':'',            
-            }
+        temp = NERItem()
   
         idx = chars_len
         for char, tag in zip(new_chars, tags):
@@ -366,83 +515,62 @@ class NER(object):
             label = tag.split('_')[-1]
             if "S" in head:
                 
-                temp['str'] = char 
-                temp['begin'] = idx 
-                temp['end'] = idx+1+char_len 
-                temp['type'] = label
-                while text[temp['begin']:temp['end']] != temp['str'] and temp['end'] < len(text):
-                    temp['begin'] += 1
-                    temp['end'] += 1
+                temp.entity = char 
+                temp.begin = idx 
+                temp.end = idx+1+char_len 
+                temp.ner_type_en = label
+                temp.ner_type_zh = self._label_en2zh[label]
+                while text[temp.begin:temp.end] != temp.entity and temp.end < len(text):
+                    temp.begin += 1
+                    temp.end += 1
                 result.append(temp)
 
-                temp = {
-                    'str':'',
-                    'begin':-1,
-                    'end':-1,
-                    'type':''
-                    }
+                temp = NERItem()
 
-            if 'B' in head:
-                temp['str'] = char
-                temp['begin'] = idx
-                temp['type'] = label      
-        
-                
+            elif 'B' in head:
+                temp.entity = char
+                temp.begin = idx
+                temp.ner_type_en = label
+                temp.ner_type_zh = self._label_en2zh[label]      
+    
             elif 'M' in head:
-                if not temp['str']:
-                    temp = {
-                    'str':'',
-                    'begin':-1,
-                    'end':-1,
-                    'type':''
-                    }
-
+                if not temp.entity:
+                    temp = NERItem()
                     continue
                 else:
-                    temp['str'] += char
+                    temp.entity += char
             elif 'E' in head:
-                if not temp['str']:
-                    temp = {
-                    'str':'',
-                    'begin':-1,
-                    'end':-1,
-                    'type':''
-                    }
+                if not temp.entity:
+                    temp = NERItem()
                     continue
                 else:
-                    temp['str'] += char
-                    temp['end'] = idx + char_len 
-                    while text[temp['begin']:temp['end']] != temp['str'] and temp['end'] < len(text):
-                        temp['begin'] += 1
-                        temp['end'] += 1
-
-                    
+                    temp.entity += char
+                    temp.end = idx + char_len 
+                    while text[temp.begin:temp.end] != temp.entity and temp.end < len(text):
+                        temp.begin += 1
+                        temp.end += 1
                     result.append(temp)
-                    temp = {
-                        'str':'',
-                        'begin':-1,
-                        'end':-1,
-                        'type':''
-                    }
-            else:
-                raise Exception("head error")
+                    temp = NERItem()
+                
             idx += char_len
         return result
     
     
-    
+import time
 if __name__ == '__main__':
     
     print(root_path)
 
-    model_path = '/data/cutword/cutword/model_params.pth'
-    processed_data = '/data/cutword/cutword/preprocess_data_final.json'
-    device = torch.device('cpu')
-    ner_model = NER(model_path=model_path, device=device, preprocess_data_path=processed_data)
+
+
+    ner_model = NER()
     sentence_list = []
-    a = '在江苏下辖的13太保中，大型民航运输机场有南京禄口国际机场、无锡硕放机场、 常州奔牛国际机场、\n徐州观音国际机场、南通兴东国际机场、扬州泰州国际机场、连云港花果山国际机场、盐城南洋国际机场、淮安涟水国际机场。涉及到了10个城市，只有苏州、镇江、宿迁三个城市没有自己冠名的大型民航运输机场。镇江、宿迁没有，还情有可原，毕竟这样体量的城市，没有机场的还有一大把，但苏州没有不应该。'
-    for _ in range(10):
-        sentence_list.append(NERInputItem(sent=a))
-    input = NERInput(input=sentence_list)
-    result = ner_model.batch_preidct(input)
-    print(result)
+    a = '丁仪那套崭新的三居室的房门，汪淼闻到了一股酒味，看到丁仪躺在沙发上，电视开着，他的双眼却望着天花板。丁仪那套崭新的三居室的房门，汪淼闻到了一股酒味，看到丁仪躺在沙发上，电视开着，他的双眼却望着天花板。”'
+    # for _ in range(10):
+    #     sentence_list.append(a)
+    time_start = time.time()
+    for i in tqdm(range(1000)):
+        result = ner_model.predict(a)
+    time_end = time.time()
+    print(time_end-time_start)
+    # print(result[0])
