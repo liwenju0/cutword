@@ -17,6 +17,8 @@ pip install cutword
 
 # 使用：
 
+## 分词功能
+
 ```python
 from  cutword import Cutter
 
@@ -41,8 +43,34 @@ print(res) # ['精诚所至', '，', '金石为开']
 
 ```
 
-# TODO
-添加命名实体识别功能
+## 命名实体识别
+
+```python
+from pprint import pprint
+from  cutword import NER
+
+ner = NER()
+res = ner.predict("奈雪的茶，新茶饮赛道开创者，创立于2015年，推出“茶饮+软欧包”双品类模式。聚焦以茶为核心的现代生活方式，奈雪已形成“现制茶饮”、“奈雪茗茶”及“RTD瓶装茶”三大业务版块，成功打造“霸气玉油柑”、“鸭屎香宝藏茶”等多款行业经典产品。")
+pprint(res) 
+'''
+[[NERItem(entity='奈雪的茶', begin=0, end=4, ner_type_en='COMMERCIAL', ner_type_zh='商业'),
+  NERItem(entity='茶饮', begin=6, end=8, ner_type_en='MANUFACTURE', ner_type_zh='物品'),
+  NERItem(entity='2015年', begin=17, end=22, ner_type_en='TIME', ner_type_zh='时间'),
+  NERItem(entity='茶饮', begin=26, end=28, ner_type_en='MANUFACTURE', ner_type_zh='物品'),
+  NERItem(entity='软欧包', begin=29, end=32, ner_type_en='MANUFACTURE', ner_type_zh='物品'),
+  NERItem(entity='茶', begin=42, end=43, ner_type_en='FOOD', ner_type_zh='食品'),
+  NERItem(entity='现代', begin=47, end=49, ner_type_en='TIME', ner_type_zh='时间'),
+  NERItem(entity='奈雪', begin=54, end=56, ner_type_en='ORG', ner_type_zh='组织'),
+  NERItem(entity='茶饮', begin=62, end=64, ner_type_en='MANUFACTURE', ner_type_zh='物品'),
+  NERItem(entity='奈雪茗茶', begin=67, end=71, ner_type_en='COMMERCIAL', ner_type_zh='商业'),
+  NERItem(entity='RTD瓶装茶', begin=74, end=80, ner_type_en='FOOD', ner_type_zh='食品'),
+  NERItem(entity='玉油柑', begin=95, end=98, ner_type_en='FOOD', ner_type_zh='食品'),
+  NERItem(entity='鸭屎香宝藏茶', begin=101, end=107, ner_type_en='FOOD', ner_type_zh='食品')]]
+'''
+
+```
+
+
 
 ## Star History
 
