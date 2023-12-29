@@ -430,7 +430,6 @@ class NER(object):
         for input_str in input_str_list:
 
             words = self._cutword.cutword(input_str)
-            # print(words)
             input_list = []
             for word in words:
                 word = word.lower()
