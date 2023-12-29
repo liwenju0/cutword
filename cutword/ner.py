@@ -1,3 +1,4 @@
+import time
 import torch
 import re
 from dataclasses import dataclass
@@ -6,8 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from model_ner import LstmNerModel
-from cutword import Cutter
+from .model_ner import LstmNerModel
+from .cutword import Cutter
 from typing import List
 import os
 import math
@@ -25,6 +26,7 @@ try:
         return t2s_converter.convert(text)
 except Exception as e:
     print("opencc 初始化失败！项目将没有繁简转化功能", e)
+
     def s2t(text: str) -> str:
         return text
 
@@ -32,16 +34,20 @@ except Exception as e:
         return text
 
 root_path = os.path.dirname(os.path.realpath(__file__))
-re_han_split = re.compile(r"([\u4E00-\u9Fa5a-zA-Z0-9+#&【】《》<>（）()〔﹝\[﹞〕\]“”\"]+)", re.U)
+re_han_split = re.compile(
+    r"([\u4E00-\u9Fa5a-zA-Z0-9+#&【】《》<>（）()〔﹝\[﹞〕\]“”\"]+)", re.U)
+
+
 @dataclass
 class NERInputItem:
     sent: str = ""
-    
-    #为了兼容cython添加
+
+    # 为了兼容cython添加
     __annotations__ = {
         'sent': str,
     }
-    
+
+
 @dataclass
 class NERItem:
     entity: str = ''
@@ -49,45 +55,43 @@ class NERItem:
     end: int = -1
     ner_type_en: str = ''
     ner_type_zh: str = ''
-    
+
     __annotations__ = {
-        'entity':str,
-        'begin': int, 
-        'end': int, 
+        'entity': str,
+        'begin': int,
+        'end': int,
         'ner_type_en': str,
         'ner_type_zh': str
     }
-    
+
+
 @dataclass
 class NERInput:
     input: List[NERInputItem]
-    
-    #为了兼容cython添加
+
+    # 为了兼容cython添加
     __annotations__ = {
         'input': List[NERInputItem]
     }
 
 
-
-
 @dataclass
 class NERResultItem:
-    sent: str 
+    sent: str
     result: List[dict]
-    
-    
+
     __annotations__ = {
-        'str':str,
+        'str': str,
         'result': List[dict]
     }
-    
+
+
 @dataclass
 class NERResult:
     results: List[NERResultItem]
     __annotations__ = {
         'results': List[NERResultItem]
     }
-    
 
 
 class NER(object):
@@ -95,20 +99,21 @@ class NER(object):
         if model_path is None:
             self._model_path = os.path.join(root_path, 'model_params.pth')
         else:
-            self._model_path = model_path 
+            self._model_path = model_path
         if preprocess_data_path is None:
-            self._preprocess_data_path = os.path.join(root_path, 'preprocess_data_final.json')
+            self._preprocess_data_path = os.path.join(
+                root_path, 'ner_vocab_tags.json')
         else:
-            self._preprocess_data_path = preprocess_data_path 
+            self._preprocess_data_path = preprocess_data_path
         if device is None:
-            self._device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self._device = torch.device(
+                'cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self._device = device
 
-        
         with open(self._preprocess_data_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-    
+
         self._id2char = data['id2char']
         self._char2id = data['char2id']
         self._label2id = data['label2id']
@@ -117,20 +122,20 @@ class NER(object):
         self._cutword = Cutter()
         self.__init_model()
         self.max_batch_size = max_batch_size
+
     def __init_model(self):
         model = LstmNerModel(
-            embedding_size=256, 
-            hidden_size=128, 
-            vocab_size=len(self._char2id), 
+            embedding_size=256,
+            hidden_size=128,
+            vocab_size=len(self._char2id),
             num_tags=len(self._label2id)
         )
         checkpoint = torch.load(
-            self._model_path, 
+            self._model_path,
             map_location=self._device
         )
 
         # 初始化模型和优化器
-
 
         # 处理模型加载时的参数名称匹配问题（如果模型在训练时使用了数据并行）
         if 'module' in list(checkpoint['model_state_dict'].keys())[0]:
@@ -141,11 +146,11 @@ class NER(object):
             model.load_state_dict(new_state_dict)
         else:
             model.load_state_dict(checkpoint['model_state_dict'])
-            
+
         model = model.to(self._device)
         self._model = model
         self._model.eval()
-        
+
     def __split_2_short_text(self, sent, max_len=126):
         if not sent:
             return []
@@ -156,7 +161,7 @@ class NER(object):
         cur = ""
         for s in sents:
             if len(cur+s) <= max_len:
-                cur += s 
+                cur += s
             else:
                 res_sents.append(cur)
                 cur = s
@@ -164,7 +169,7 @@ class NER(object):
             res_sents.append(cur)
 
         return res_sents
-        
+
     def __cut_sentences(self, para, drop_empty_line=True, strip=True, deduplicate=False, split_2_short=False, max_len=256, need_clean=False):
         '''cut_sentences
         :param para: 输入文本
@@ -175,7 +180,7 @@ class NER(object):
         '''
         if para is None or len(para) == 0:
             return []
-                
+
         if deduplicate:
             para = re.sub(r"([。！？\!\?;；])\1+", r"\1", para)
         para = re.sub(r'\s+', '\n', para)
@@ -186,7 +191,7 @@ class NER(object):
         # 去掉分号断句，因为可能引发语法检测的误报，
         # 比如这句：彭涛说，小时候，自己梦想走出大山；一年支教，让自己又回到了大山；和孩子们相处一年，自己未来多了几分扎根大山的打算。
         # 一年支教，让自己又回到了大山；这句话会引发成分缺失的误报
-        # para = re.sub(r'([;；])([^，。！？\?])', r'\1\n\2', para) 
+        # para = re.sub(r'([;；])([^，。！？\?])', r'\1\n\2', para)
         # 如果双引号前有终止符，那么双引号才是句子的终点，把分句符\n放到双引号后，注意前面的几句都小心保留了双引号
         para = para.rstrip()  # 段尾如果有多余的\n就去掉它
         sentences = para.split("\n")
@@ -197,9 +202,9 @@ class NER(object):
 
         if not split_2_short:
             return sentences
-        
+
         assert max_len > 0, f"max_len must be set to a positive integer, got {max_len}"
-        
+
         short_sents = []
         for sent in sentences:
             s_sents = self.__split_2_short_text(sent, max_len)
@@ -210,68 +215,68 @@ class NER(object):
         
     def __digit_alpha_map(self, text):
         digit_and_alpha_map = {
-            '１':'1',
-            '２':'2',
-            '３':'3',
-            '４':'4',
-            '５':'5',
-            '６':'6',
-            '７':'7',
-            '８':'8',
-            '９':'9',
-            '０':'0',
-            'Ａ':'A',
-            'Ｂ':'B',
-            'Ｃ':'C',
-            'Ｄ':'D',
-            'Ｅ':'E',
-            'Ｆ':'F',
-            'Ｇ':'G',
-            'Ｈ':'H',
-            'Ｉ':'I',
-            'Ｊ':'J',
-            'Ｋ':'K',
-            'Ｌ':'L',
-            'Ｍ':'M',
-            'Ｎ':'N',
-            'Ｏ':'O',
-            'Ｐ':'P',
-            'Ｑ':'Q',
-            'Ｒ':'R',
-            'Ｓ':'S',
-            'Ｔ':'T',
-            'Ｕ':'U',
-            'Ｖ':'V',
-            'Ｗ':'W',
-            'Ｘ':'X',
-            'Ｙ':'Y',
-            'Ｚ':'Z',
-            'ａ':'a',
-            'ｂ':'b',
-            'ｃ':'c',
-            'ｄ':'d',
-            'ｅ':'e',
-            'ｆ':'f',
-            'ｇ':'g',
-            'ｈ':'h',
-            'ｉ':'i',
-            'ｊ':'j',
-            'ｋ':'k',
-            'ｌ':'l',
-            'ｍ':'m',
-            'ｎ':'n',
-            'ｏ':'o',
-            'ｐ':'p',
-            'ｑ':'q',
-            'ｒ':'r',
-            'ｓ':'s',
-            'ｔ':'t',
-            'ｕ':'u',
-            'ｖ':'v',
-            'ｗ':'w',
-            'ｘ':'x',
-            'ｙ':'y',
-            'ｚ':'z',
+            '１': '1',
+            '２': '2',
+            '３': '3',
+            '４': '4',
+            '５': '5',
+            '６': '6',
+            '７': '7',
+            '８': '8',
+            '９': '9',
+            '０': '0',
+            'Ａ': 'A',
+            'Ｂ': 'B',
+            'Ｃ': 'C',
+            'Ｄ': 'D',
+            'Ｅ': 'E',
+            'Ｆ': 'F',
+            'Ｇ': 'G',
+            'Ｈ': 'H',
+            'Ｉ': 'I',
+            'Ｊ': 'J',
+            'Ｋ': 'K',
+            'Ｌ': 'L',
+            'Ｍ': 'M',
+            'Ｎ': 'N',
+            'Ｏ': 'O',
+            'Ｐ': 'P',
+            'Ｑ': 'Q',
+            'Ｒ': 'R',
+            'Ｓ': 'S',
+            'Ｔ': 'T',
+            'Ｕ': 'U',
+            'Ｖ': 'V',
+            'Ｗ': 'W',
+            'Ｘ': 'X',
+            'Ｙ': 'Y',
+            'Ｚ': 'Z',
+            'ａ': 'a',
+            'ｂ': 'b',
+            'ｃ': 'c',
+            'ｄ': 'd',
+            'ｅ': 'e',
+            'ｆ': 'f',
+            'ｇ': 'g',
+            'ｈ': 'h',
+            'ｉ': 'i',
+            'ｊ': 'j',
+            'ｋ': 'k',
+            'ｌ': 'l',
+            'ｍ': 'm',
+            'ｎ': 'n',
+            'ｏ': 'o',
+            'ｐ': 'p',
+            'ｑ': 'q',
+            'ｒ': 'r',
+            'ｓ': 's',
+            'ｔ': 't',
+            'ｕ': 'u',
+            'ｖ': 'v',
+            'ｗ': 'w',
+            'ｘ': 'x',
+            'ｙ': 'y',
+            'ｚ': 'z',
         }
         new_words = []
         for char in text:
@@ -280,9 +285,10 @@ class NER(object):
             else:
                 new_words.append(char)
         return ''.join(new_words)
+
     def _is_digit(self, text):
         return text.isdigit()
-    
+
     def _is_hanzi(self, text):
         """
         判断序列是否为英文
@@ -297,7 +303,6 @@ class NER(object):
             return True
         else:
             return False
-        
 
     def _is_english(self, text):
         pattern1 = re.compile(r"^[A-Za-z]+$")
@@ -305,7 +310,7 @@ class NER(object):
             return True
         else:
             return False
-    
+
     def __is_special_token(self, text):
         pattern1 = re.compile(r"^[A-Za-z]+$")
         pattern2 = re.compile(r"^[A-Za-z0-9]+$")
@@ -316,15 +321,13 @@ class NER(object):
             return True
         else:
             return False
-        
 
     def __make_input(self, text: str):
-    
+
         return NERInputItem(sent=text)
-    
-    
+
     def __make_batch(self, input_tensors, seq_lens):
-        
+
         if len(seq_lens) <= self.max_batch_size:
             return [input_tensors], [seq_lens]
         else:
@@ -340,18 +343,15 @@ class NER(object):
 
             return temp_batch_input_tensors, temp_batch_seq_lens
 
-    
-    
-    def predict(self, texts:'str|list'):
+    def predict(self, texts: 'str|list'):
         if not texts:
             return []
         if isinstance(texts, list) and all(not a for a in texts):
             return []
-        
+
         if isinstance(texts, str):
             texts = [texts]
 
-        
         sentence_id = []
         input_lists = []
         for idx, text in enumerate(texts):
@@ -361,23 +361,23 @@ class NER(object):
             input_list = self.__cut_sentences(text)
             input_lists.extend(input_list)
             sentence_id.extend([idx]*len(input_list))
-            
+
         input_tensors, seq_lens, input_lists = self.__encode(input_lists)
         input_tensors_batched_list, seq_lens_batched_list = self.__make_batch(
             input_tensors, seq_lens)
         predict_tags_all = []
         for input_tensors_batched, seq_lens_batched in zip(input_tensors_batched_list, seq_lens_batched_list):
-            
+
             predict_tags = self.__get_model_output(
-                input_tensors_batched, 
+                input_tensors_batched,
                 seq_lens_batched,
             )
             predict_tags_all.extend(predict_tags)
-        res = self.__predict_tags(predict_tags_all, input_lists, texts, sentence_id)
-        
+        res = self.__predict_tags(
+            predict_tags_all, input_lists, texts, sentence_id)
+
         return res
-    
-    
+
     def __get_model_output(self, input_tensor, seq_lens):
         with torch.no_grad():
             input_tensor = input_tensor.to(self._device)
@@ -385,18 +385,15 @@ class NER(object):
 
             predict_tags = self._model.crf.decode(output_fc, mask)
         return predict_tags
-        
-    
-    
+
     def __predict_tags(self, predict_tags_all, input_lists, texts, sentence_id):
-        
 
         pre_idx = None
         results = []
         result = []
         chars_len = 0
         for i in range(len(sentence_id)):
-            
+
             pre = predict_tags_all[i]
             # pre = pre.cpu().tolist()
             chars = input_lists[i]
@@ -406,8 +403,8 @@ class NER(object):
             text_simple = text_simple.lower()
             text_simple = self.__digit_alpha_map(text_simple)
             if idx == pre_idx:
-            
-            # for pre, chars in zip(predict_tags, input_lists):
+
+                # for pre, chars in zip(predict_tags, input_lists):
                 pre = [self._id2label[t] for t in pre]
                 pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
                 result.extend(pre_result)
@@ -416,17 +413,16 @@ class NER(object):
                 if pre_idx is not None:
                     results.append(result)
                 pre_idx = idx
-                
+
                 pre = [self._id2label[t] for t in pre]
                 pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
                 result = pre_result
-                chars_len =  len(chars)
-            
-            
+                chars_len = len(chars)
+
         if result:
-            results.append(result) 
+            results.append(result)
         return results
-        
+
     def __encode(self, input_str_list: List[str]):
         input_tensors = []
         seq_lens = []
@@ -446,7 +442,7 @@ class NER(object):
 
                     for char in word:
                         input_list.append(char)
-        
+
             input_tensor = []
             for char in input_list:
                 if char == '[SEP]':
@@ -469,7 +465,8 @@ class NER(object):
             input_tensors.append(torch.tensor(input_tensor))
             seq_lens.append(seq_len)
             input_lists.append(input_list)
-        input_tensors = pad_sequence(input_tensors, batch_first=True, padding_value=0)
+        input_tensors = pad_sequence(
+            input_tensors, batch_first=True, padding_value=0)
         return torch.tensor(input_tensors), torch.tensor(seq_lens), input_lists
                 
     def __decode_prediction(self, chars, tags, chars_len, text, text_simple):
@@ -482,7 +479,7 @@ class NER(object):
         assert len(new_chars) == len(tags), "{}{}".format(new_chars, tags)
         result = []
         temp = NERItem()
-  
+
         idx = chars_len
         for char, tag in zip(new_chars, tags):
             if tag == "O":
@@ -513,8 +510,8 @@ class NER(object):
                 temp.entity = char
                 temp.begin = idx
                 temp.ner_type_en = label
-                temp.ner_type_zh = self._label_en2zh[label]      
-    
+                temp.ner_type_zh = self._label_en2zh[label]
+
             elif 'M' in head:
                 if not temp.entity:
                     temp = NERItem()
@@ -537,17 +534,14 @@ class NER(object):
                     temp.entity = text[temp.begin:temp.end]
                     result.append(temp)
                     temp = NERItem()
-                
+
             idx += char_len
         return result
-    
-    
-import time
+
+
 if __name__ == '__main__':
-    
+
     print(root_path)
-
-
 
     ner_model = NER()
     sentence_list = []
