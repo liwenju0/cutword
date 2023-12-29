@@ -206,33 +206,7 @@ class NER(object):
             short_sents.extend(s_sents)
         return short_sents
         
-    # def __cut_sentences(self, para, drop_empty_line=True, strip=False, deduplicate=False):
-    #     '''cut_sentences
-    #     :param para: 输入文本
-    #     :param drop_empty_line: 是否丢弃空行
-    #     :param strip: 是否对每一句话做一次strip
-    #     :param deduplicate: 是否对连续标点去重，帮助对连续标点结尾的句子分句
-    #     :return: sentences: list of str
-    #     '''
-    #     if deduplicate:
-    #         para = re.sub(r"([。！？\!\?;；])\1+", r"\1", para)
 
-    #     para = re.sub(r'([。！？\?!])([^”’])', r"\1\n\2", para)  # 单字符断句符
-    #     para = re.sub(r'(\.{3,6})([^”’])', r"\1\n\2", para)  # 英文省略号
-    #     para = re.sub(r'(\…{2})([^”’])', r"\1\n\2", para)  # 中文省略号
-    #     para = re.sub(r'([。！？\?!][”’])([^，。！？\?])', r'\1\n\2', para)
-    #     # 去掉分号断句，因为可能引发语法检测的误报，
-    #     # 比如这句：彭涛说，小时候，自己梦想走出大山；一年支教，让自己又回到了大山；和孩子们相处一年，自己未来多了几分扎根大山的打算。
-    #     # 一年支教，让自己又回到了大山；这句话会引发成分缺失的误报
-    #     # para = re.sub(r'([;；])([^，。！？\?])', r'\1\n\2', para) 
-    #     # 如果双引号前有终止符，那么双引号才是句子的终点，把分句符\n放到双引号后，注意前面的几句都小心保留了双引号
-    #     para = para.rstrip()  # 段尾如果有多余的\n就去掉它
-    #     sentences = para.split("\n")
-    #     if strip:
-    #         sentences = [sent.strip() for sent in sentences]
-    #     if drop_empty_line:
-    #         sentences = [sent for sent in sentences if len(sent.strip()) > 0]
-    #     return sentences
         
     def __digit_alpha_map(self, text):
         digit_and_alpha_map = {
@@ -428,11 +402,14 @@ class NER(object):
             chars = input_lists[i]
             idx = sentence_id[i]
             text = texts[idx]
+            text_simple = t2s(text)
+            text_simple = text_simple.lower()
+            text_simple = self.__digit_alpha_map(text_simple)
             if idx == pre_idx:
             
             # for pre, chars in zip(predict_tags, input_lists):
                 pre = [self._id2label[t] for t in pre]
-                pre_result = self.__decode_prediction(chars, pre, chars_len, text)
+                pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
                 result.extend(pre_result)
                 chars_len += len(chars)
             else:
@@ -441,7 +418,7 @@ class NER(object):
                 pre_idx = idx
                 
                 pre = [self._id2label[t] for t in pre]
-                pre_result = self.__decode_prediction(chars, pre, chars_len, text)
+                pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
                 result = pre_result
                 chars_len =  len(chars)
             
@@ -455,7 +432,7 @@ class NER(object):
         seq_lens = []
         input_lists = []
         for input_str in input_str_list:
-            
+
             words = self._cutword.cutword(input_str)
             # print(words)
             input_list = []
@@ -485,6 +462,7 @@ class NER(object):
                         input_tensor.append(self._char2id['[HANZI]'])
                     else:
                         input_tensor.append(self._char2id['[UNK]'])
+    
                 
             seq_len = len(input_tensor)
 
@@ -494,7 +472,7 @@ class NER(object):
         input_tensors = pad_sequence(input_tensors, batch_first=True, padding_value=0)
         return torch.tensor(input_tensors), torch.tensor(seq_lens), input_lists
                 
-    def __decode_prediction(self, chars, tags, chars_len, text):
+    def __decode_prediction(self, chars, tags, chars_len, text, text_simple):
         new_chars = []
         for char in chars:
             if char == '[SEP]':
@@ -517,12 +495,16 @@ class NER(object):
                 
                 temp.entity = char 
                 temp.begin = idx 
-                temp.end = idx+1+char_len 
+                temp.end = idx+char_len 
                 temp.ner_type_en = label
                 temp.ner_type_zh = self._label_en2zh[label]
-                while text[temp.begin:temp.end] != temp.entity and temp.end < len(text):
+                while text_simple[temp.begin:temp.end] != temp.entity and temp.end < len(text):
                     temp.begin += 1
                     temp.end += 1
+                if text_simple[temp.begin:temp.end] != temp.entity:
+                    temp = NERItem()
+                    continue
+                temp.entity = text[temp.begin:temp.end]
                 result.append(temp)
 
                 temp = NERItem()
@@ -546,9 +528,13 @@ class NER(object):
                 else:
                     temp.entity += char
                     temp.end = idx + char_len 
-                    while text[temp.begin:temp.end] != temp.entity and temp.end < len(text):
+                    while text_simple[temp.begin:temp.end] != temp.entity and temp.end < len(text):
                         temp.begin += 1
                         temp.end += 1
+                    if text_simple[temp.begin:temp.end] != temp.entity:
+                        temp = NERItem()
+                        continue
+                    temp.entity = text[temp.begin:temp.end]
                     result.append(temp)
                     temp = NERItem()
                 
@@ -565,12 +551,13 @@ if __name__ == '__main__':
 
     ner_model = NER()
     sentence_list = []
-    a = '丁仪那套崭新的三居室的房门，汪淼闻到了一股酒味，看到丁仪躺在沙发上，电视开着，他的双眼却望着天花板。丁仪那套崭新的三居室的房门，汪淼闻到了一股酒味，看到丁仪躺在沙发上，电视开着，他的双眼却望着天花板。”'
+    a = '奈雪的茶，新茶饮赛道开创者，创立于2015年，领创推出“茶饮+软欧包”双品类模式。\n\n\t聚焦以茶为核心的现代生活方式，奈雪已形成“现制茶饮”、“奈雪茗茶”及“RTD瓶装茶”三大业务版块，成功打造“霸气玉油柑”、“鸭屎香宝藏茶”等多款行业爆品。'
     # for _ in range(10):
     #     sentence_list.append(a)
-    time_start = time.time()
-    for i in tqdm(range(1000)):
-        result = ner_model.predict(a)
-    time_end = time.time()
-    print(time_end-time_start)
-    # print(result[0])
+
+    result = ner_model.predict(a)
+
+    for item in result[0]:
+        print("entity:", item.entity)
+        print('entity_in_text:', a[item.begin:item.end])
+        print('******************************************')
