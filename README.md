@@ -10,14 +10,14 @@ cutword 是一个中文分词库，字典文件根据最新数据统计得到，
 分词速度是jieba的两倍。
 可通过 python -m cutword.comparewithjieba 进行测试。
 
-# 安装：
+# 1、安装：
 ```
 pip install cutword
 ```
 
-# 使用：
+# 2、使用：
 
-## 分词功能
+## 2.1分词功能
 
 ```python
 from  cutword import Cutter
@@ -43,7 +43,9 @@ print(res) # ['精诚所至', '，', '金石为开']
 
 ```
 
-## 命名实体识别
+## 2.2命名实体识别
+
+### 2.2.1 使用方法
 
 ```python
 from pprint import pprint
@@ -69,6 +71,27 @@ pprint(res)
 '''
 
 ```
+### 2.2.2 支持的实体类型
+| 英文类型名 | 中文类型名 |
+| --- | --- |
+| FOOD | 食品 |
+| MATTER | 物质 |
+| MANUFACTURE | 物品 |
+| CREATION | 作品 |
+| ORG | 组织 |
+| PC | 计算机 |
+| PROPERTY | 属性 |
+| COMMERCIAL | 商业 |
+| INCIDENT | 事件 |
+| CREATURE | 生物 |
+| BASE | 基础 |
+| AFFAIR | 活动 |
+| TIME | 时间 |
+| LOC | 位置 |
+| PHYSIOLOGY | 组织器官 |
+| PERSON | 人名 |
+| TERMINOLOGY | 领域术语 |
+
 
 
 
