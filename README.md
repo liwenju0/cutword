@@ -72,25 +72,25 @@ pprint(res)
 
 ```
 ### 2.2.2 支持的实体类型
-| 英文类型名 | 中文类型名 |
-| --- | --- |
-| FOOD | 食品 |
-| MATTER | 物质 |
-| MANUFACTURE | 物品 |
-| CREATION | 作品 |
-| ORG | 组织 |
-| PC | 计算机 |
-| PROPERTY | 属性 |
-| COMMERCIAL | 商业 |
-| INCIDENT | 事件 |
-| CREATURE | 生物 |
-| BASE | 基础 |
-| AFFAIR | 活动 |
-| TIME | 时间 |
-| LOC | 位置 |
-| PHYSIOLOGY | 组织器官 |
-| PERSON | 人名 |
-| TERMINOLOGY | 领域术语 |
+| 编号 | 英文类型名 | 中文类型名 |
+| --- | --- | --- |
+| 1 | FOOD | 食品 |
+| 2 | MATTER | 物质 |
+| 3 | MANUFACTURE | 物品 |
+| 4 | CREATION | 作品 |
+| 5 | ORG | 组织 |
+| 6 | PC | 计算机 |
+| 7 | PROPERTY | 属性 |
+| 8 | COMMERCIAL | 商业 |
+| 9 | INCIDENT | 事件 |
+| 10 | CREATURE | 生物 |
+| 11 | BASE | 基础 |
+| 12 | AFFAIR | 活动 |
+| 13 | TIME | 时间 |
+| 14 | LOC | 位置 |
+| 15 | PHYSIOLOGY | 组织器官 |
+| 16 | PERSON | 人名 |
+| 17 | TERMINOLOGY | 领域术语 |
 
 
 
