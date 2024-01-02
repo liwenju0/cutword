@@ -7,8 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from model_ner import LstmNerModel
-from cutword import Cutter
+from .model_ner import LstmNerModel
+from .cutword import Cutter
 from typing import List
 import os
 import math

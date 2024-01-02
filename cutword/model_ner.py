@@ -1,7 +1,7 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from torch import nn
-from pytorchcrf import CRF
+from .pytorchcrf import CRF
 
 
 
