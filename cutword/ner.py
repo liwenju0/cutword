@@ -443,7 +443,7 @@ class NER(object):
                     else:
                         for char in word:
                             input_list.append(char)
-            print('input_list:', input_list)
+            # print('input_list:', input_list)
 
             input_tensor = []
             for char in input_list:
