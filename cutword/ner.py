@@ -7,8 +7,8 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from .model_ner import LstmNerModel
-from .cutword import Cutter
+from model_ner import LstmNerModel
+from cutword import Cutter
 from typing import List
 import os
 import math
@@ -438,9 +438,12 @@ class NER(object):
                     for _ in range(len(word.strip())):
                         input_list.append('[SEP]')
                 else:
-
-                    for char in word:
-                        input_list.append(char)
+                    if self._char2id.get(word) is not None:
+                        input_list.append(word)
+                    else:
+                        for char in word:
+                            input_list.append(char)
+            print('input_list:', input_list)
 
             input_tensor = []
             for char in input_list:
@@ -541,16 +544,13 @@ class NER(object):
 if __name__ == '__main__':
 
     print(root_path)
-
-    ner_model = NER()
+    # ner_model = NER()
+    ner_model = NER(model_path='/data/cutword/cutword/model_params.pth',preprocess_data_path='/data/cutword/cutword/ner_vocab_tags.json')
     sentence_list = []
-    a = '奈雪的茶，新茶饮赛道开创者，创立于2015年，领创推出“茶饮+软欧包”双品类模式。\n\n\t聚焦以茶为核心的现代生活方式，奈雪已形成“现制茶饮”、“奈雪茗茶”及“RTD瓶装茶”三大业务版块，成功打造“霸气玉油柑”、“鸭屎香宝藏茶”等多款行业爆品。'
+    a = '炊事员玛钦次旦'
     # for _ in range(10):
     #     sentence_list.append(a)
 
     result = ner_model.predict(a)
 
-    for item in result[0]:
-        print("entity:", item.entity)
-        print('entity_in_text:', a[item.begin:item.end])
-        print('******************************************')
+    print(result)
