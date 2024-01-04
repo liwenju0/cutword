@@ -343,7 +343,7 @@ class NER(object):
 
             return temp_batch_input_tensors, temp_batch_seq_lens
 
-    def predict(self, texts: 'str|list'):
+    def predict(self, texts: 'str|list', return_words=False):
         if not texts:
             return []
         if isinstance(texts, list) and all(not a for a in texts):
@@ -361,8 +361,9 @@ class NER(object):
             input_list = self.__cut_sentences(text)
             input_lists.extend(input_list)
             sentence_id.extend([idx]*len(input_list))
-
-        input_tensors, seq_lens, input_lists = self.__encode(input_lists)
+        word_list = [self._cutword.cutword(sent) for sent in input_lists]
+        
+        input_tensors, seq_lens, input_lists = self.__encode(word_list)
         input_tensors_batched_list, seq_lens_batched_list = self.__make_batch(
             input_tensors, seq_lens)
         predict_tags_all = []
@@ -375,7 +376,26 @@ class NER(object):
             predict_tags_all.extend(predict_tags)
         res = self.__predict_tags(
             predict_tags_all, input_lists, texts, sentence_id)
-
+        
+        if return_words:
+            words = []
+            cur_words = []
+            cur_sent_id = None
+            for sent_words, sent_id in zip(word_list, sentence_id):
+                if not cur_sent_id:
+                    cur_words.extend(sent_words)
+                    cur_sent_id = sent_id
+                elif cur_sent_id == sent_id:
+                    cur_words.extend(sent_words)
+                else:
+                    cur_sent_id = sent_id
+                    words.append(cur_words)
+                    cur_words = [w for w in sent_words]
+            
+            if cur_words:
+                words.append(cur_words)
+        
+            return res, words
         return res
 
     def __get_model_output(self, input_tensor, seq_lens):
@@ -423,13 +443,11 @@ class NER(object):
             results.append(result)
         return results
 
-    def __encode(self, input_str_list: List[str]):
+    def __encode(self, words_list: "list[list[str]]"):
         input_tensors = []
         seq_lens = []
         input_lists = []
-        for input_str in input_str_list:
-
-            words = self._cutword.cutword(input_str)
+        for words in words_list:
             input_list = []
             for word in words:
                 word = word.lower()
