@@ -484,7 +484,6 @@ class NER(object):
 
         results = []
         for i in range(len(texts)):
-            result = []
             chars_len = 0
             predict_tags = grouped_predict_tags[i]
             tokens_list = grouped_tokens_list[i]
@@ -500,9 +499,8 @@ class NER(object):
                 text, 
                 text_simple
             )
-            result.extend(pre_result)
 
-        results.append(result)
+            results.append(pre_result)
         return results
 
     def __get_normalize_sent(self, sent):
