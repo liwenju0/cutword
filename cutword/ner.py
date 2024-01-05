@@ -1,4 +1,5 @@
-import time
+import sys
+sys.path.append('../')
 import torch
 import re
 from dataclasses import dataclass
@@ -7,8 +8,8 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from .model_ner import LstmNerModel
-from .cutword import Cutter
+from model_ner import LstmNerModel
+from cutword import Cutter
 from typing import List
 import os
 import math
@@ -336,7 +337,10 @@ class NER(object):
             sentence_ids.extend([sentence_id]*len(sentence_list))
         return sentence_ids, sentence_lists
 
-    def _make_batch_encode_predict(self, sentence_list):
+    
+    def _make_batch_encode_predict(self, sentence_list:"list[str]"):
+        
+        #对句子进行分组
         batched_sentence_lists = []
         if len(sentence_list) <= self.max_batch_size:
             batched_sentence_lists = [sentence_list]
@@ -346,24 +350,39 @@ class NER(object):
                 start = i * self.max_batch_size
                 end = min((i + 1) * self.max_batch_size, len(sentence_list))
                 batched_sentence_lists.append(sentence_list[start:end])
-        predict_tags_all, tokens_lists = [], []
-        word_list_all = []
-        for batched_sentence_list in batched_sentence_lists:
-            word_list = [self._cutword.cutword(
-                self.__get_normalize_sent(sent)) for sent in batched_sentence_list]
+        
+        pred_crf_tags_all, tokens_lists_all, word_list_all = [], [], []
+        for a_batch_sents in batched_sentence_lists:
+            a_batch_word_list = [
+                self._cutword.cutword(
+                    self.__get_normalize_sent(sent)
+                ) 
+                for sent in a_batch_sents
+            ]
 
-            input_tensors_batched, seq_lens_batched, tokens_list = self.__encode(
-                word_list)
-            predict_tags = self.__get_model_output(
-                input_tensors_batched,
-                seq_lens_batched,
+            (
+                a_batch_input_tensors, 
+                a_batch_seq_lens, 
+                a_batch_tokens_list
+            ) = self.__encode(a_batch_word_list)
+            
+            a_batch_pred_crf_tags = self.__get_model_output(
+                a_batch_input_tensors,
+                a_batch_seq_lens,
             )
-            predict_tags_all.append(predict_tags)
-            tokens_lists.append(tokens_list)
-            word_list_all.extend(word_list)
-        assert len(predict_tags_all) == len(tokens_lists) == len(
-            sentence_list), f'predict_tags_all:{len(predict_tags_all)}, tokens_lists, sentence_lists not equal'
-        return predict_tags_all, tokens_lists, word_list_all
+            pred_crf_tags_all.extend(a_batch_pred_crf_tags)
+            tokens_lists_all.extend(a_batch_tokens_list)
+            word_list_all.extend(a_batch_word_list)
+        
+        assert len(pred_crf_tags_all) == len(
+            tokens_lists_all) == len(
+            sentence_list
+            ), f'predict_tags_all:{len(pred_crf_tags_all)}, \
+                tokens_lists: {len(tokens_lists_all)},\
+                sentence_lists: {len(sentence_list)} \
+                NOT equal'
+        
+        return pred_crf_tags_all, tokens_lists_all, word_list_all
 
     def __get_text_output(self, tokens_lists, predict_tags_all, sentence_ids):
         grouped_tokens_list = []
@@ -386,8 +405,8 @@ class NER(object):
                     temp_token_list = []
                     temp_predict_tags = []
 
-        grouped_tokens_list.extend(temp_token_list)
-        grouped_predict_tags.extend(temp_predict_tags)
+        grouped_tokens_list.append(temp_token_list)
+        grouped_predict_tags.append(temp_predict_tags)
         return grouped_tokens_list, grouped_predict_tags
 
     def __get_ori_word_list(self, sentence_list, word_list_all, sentence_id_list):
@@ -431,11 +450,17 @@ class NER(object):
 
         sentence_id_list, sentence_list = self._get_sent_list(texts)
 
-        predict_tags_all, tokens_lists, word_list_all = self._make_batch_encode_predict(
-            sentence_list)
+        (
+            predict_tags_all, 
+            tokens_lists, 
+            word_list_all
+        ) = self._make_batch_encode_predict(sentence_list)
 
         grouped_tokens_list, grouped_predict_tags = self.__get_text_output(
-            tokens_lists, predict_tags_all, sentence_id_list)
+            tokens_lists, 
+            predict_tags_all, 
+            sentence_id_list
+        )
         res = self.__predict_tags(
             grouped_predict_tags, grouped_tokens_list, texts)
 
@@ -449,6 +474,7 @@ class NER(object):
     def __get_model_output(self, input_tensor, seq_lens):
         with torch.no_grad():
             input_tensor = input_tensor.to(self._device)
+            seq_lens = seq_lens.to(self._device)
             output_fc, mask = self._model(input_tensor, seq_lens)
 
             predict_tags = self._model.crf.decode(output_fc, mask)
@@ -468,7 +494,12 @@ class NER(object):
             text_simple = self.__digit_alpha_map(text_simple)
             predict_tags = [self._id2label[t] for t in predict_tags]
             pre_result = self.__decode_prediction(
-                tokens_list, predict_tags, chars_len, text, text_simple)
+                tokens_list, 
+                predict_tags, 
+                chars_len, 
+                text, 
+                text_simple
+            )
             result.extend(pre_result)
 
         results.append(result)
@@ -480,44 +511,48 @@ class NER(object):
         sent_normalized = t2s(sent_normalized)
         return sent_normalized
 
-    def __encode(self, words_list: "list[list[str]]"):
+    def __encode(self, a_batch_words_list: "list[list[str]]"):
         input_tensors = []
         seq_lens = []
         input_lists = []
-        for words in words_list:
-            input_list = []
-            for word in words:
+        for a_sent_words in a_batch_words_list:
+            a_sent_chars = []
+            for word in a_sent_words:
                 word = word.lower()
                 word = self.__digit_alpha_map(word)
                 if word.strip() == '':
                     for _ in range(len(word.strip())):
-                        input_list.append('[SEP]')
+                        a_sent_chars.append('[SEP]')
                 else:
                     if self._char2id.get(word) is not None:
-                        input_list.append(word)
+                        a_sent_chars.append(word)
                     else:
                         for char in word:
-                            input_list.append(char)
+                            a_sent_chars.append(char)
 
-            input_tensor = []
-            for char in input_list:
+            a_sent_input_tensor = []
+            for char in a_sent_chars:
                 if self._char2id.get(char):
-                    input_tensor.append(self._char2id[char])
+                    a_sent_input_tensor.append(self._char2id[char])
                 else:
                     if self._is_digit(char):
-                        input_tensor.append(self._char2id['[NUMBER]'])
+                        a_sent_input_tensor.append(self._char2id['[NUMBER]'])
                     elif self._is_hanzi(char):
-                        input_tensor.append(self._char2id['[HANZI]'])
+                        a_sent_input_tensor.append(self._char2id['[HANZI]'])
                     else:
-                        input_tensor.append(self._char2id['[UNK]'])
+                        a_sent_input_tensor.append(self._char2id['[UNK]'])
 
-            seq_len = len(input_tensor)
+            a_sent_seq_len = len(a_sent_input_tensor)
 
-            input_tensors.append(torch.tensor(input_tensor))
-            seq_lens.append(seq_len)
-            input_lists.append(input_list)
+            input_tensors.append(torch.tensor(a_sent_input_tensor))
+            seq_lens.append(a_sent_seq_len)
+            input_lists.append(a_sent_chars)
+        
         input_tensors = pad_sequence(
-            input_tensors, batch_first=True, padding_value=0)
+            input_tensors, 
+            batch_first=True, 
+            padding_value=0
+        )
         return torch.tensor(input_tensors), torch.tensor(seq_lens), input_lists
 
     def __decode_prediction(self, chars, tags, chars_len, text, text_simple):
@@ -594,10 +629,22 @@ if __name__ == '__main__':
 
     print(root_path)
     # ner_model = NER()
-    ner_model = NER(model_path='/data/cutword/cutword/model_params.pth',
-                    preprocess_data_path='/data/cutword/cutword/ner_vocab_tags.json')
+    ner_model = NER(model_path='/Users/milter/Downloads/临时数据/cutword/cutword/model_params.pth',
+                    preprocess_data_path='/Users/milter/Downloads/临时数据/cutword/cutword/ner_vocab_tags.json')
     sentence_list = []
-    a = '蘇恩曦Jack和酒德麻衣rose神色凝重地走向大廳。'
+    a = '''
+    布莱恩科比，是世界文明的篮球巨星。世事无常，令人感到挽惜的是，科比因为飞机事故原因已经离开了人世，一代巨星的陨落，让整个篮球界都感到非常很悲伤。科比一生己经为湖人队效力了20个赛季，在这20个赛季中，科比将曼巴精神演艺到了极致，带着伤病坚持比赛.科比精神不但激励大家，而且鼓舞人心。
+
+
+
+他与湖人队签订了一份为期两年价值4850万美元的续约合同，这将使他成为第一位为同一支球队效力达到20年的NBA球员，。 2014年3月12日，湖人队宣布科比2013-14赛季报销。
+
+
+
+2014-15赛季，科比复出征战他代表湖人队的弟19个赛季。2014年11月30日，在一场129-122加时赛击败多伦多猛龙队的比赛中，科比得到了生涯第20次三双，31分，12次助攻以及11个篮板。在36岁的年纪，他成为NBA得到30分，10个篮板，10次助攻的最年长球员，这是全世界的创举一个。如果说篮球是一座链接世界的桥，那么科比就是这座桥的其中一个桥礅。
+
+
+    '''
     res, word_list = ner_model.predict(a, return_words=True)
     print(res)
     print(word_list)
