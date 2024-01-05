@@ -210,9 +210,7 @@ class NER(object):
             s_sents = self.__split_2_short_text(sent, max_len)
             short_sents.extend(s_sents)
         return short_sents
-        
 
-        
     def __digit_alpha_map(self, text):
         digit_and_alpha_map = {
             '１': '1',
@@ -326,22 +324,101 @@ class NER(object):
 
         return NERInputItem(sent=text)
 
-    def __make_batch(self, input_tensors, seq_lens):
+    def _get_sent_list(self, texts):
+        sentence_ids = []
+        sentence_lists = []
+        for sentence_id, text in enumerate(texts):
+            item = self.__make_input(text)
+            text = item.sent
 
-        if len(seq_lens) <= self.max_batch_size:
-            return [input_tensors], [seq_lens]
+            sentence_list = self.__cut_sentences(text)
+            sentence_lists.extend(sentence_list)
+            sentence_ids.extend([sentence_id]*len(sentence_list))
+        return sentence_ids, sentence_lists
+
+    def _make_batch_encode_predict(self, sentence_list):
+        batched_sentence_lists = []
+        if len(sentence_list) <= self.max_batch_size:
+            batched_sentence_lists = [sentence_list]
         else:
-            num_batch = math.ceil(len(seq_lens) / self.max_batch_size)
-            temp_batch_input_tensors = []
-            temp_batch_seq_lens = []
-
+            num_batch = math.ceil(len(sentence_list) / self.max_batch_size)
             for i in range(num_batch):
                 start = i * self.max_batch_size
-                end = min((i + 1) * self.max_batch_size, len(seq_lens))
-                temp_batch_input_tensors.append(input_tensors[start:end])
-                temp_batch_seq_lens.append(seq_lens[start:end])
+                end = min((i + 1) * self.max_batch_size, len(sentence_list))
+                batched_sentence_lists.append(sentence_list[start:end])
+        predict_tags_all, tokens_lists = [], []
+        word_list_all = []
+        for batched_sentence_list in batched_sentence_lists:
+            word_list = [self._cutword.cutword(
+                self.__get_normalize_sent(sent)) for sent in batched_sentence_list]
 
-            return temp_batch_input_tensors, temp_batch_seq_lens
+            input_tensors_batched, seq_lens_batched, tokens_list = self.__encode(
+                word_list)
+            predict_tags = self.__get_model_output(
+                input_tensors_batched,
+                seq_lens_batched,
+            )
+            predict_tags_all.append(predict_tags)
+            tokens_lists.append(tokens_list)
+            word_list_all.extend(word_list)
+        assert len(predict_tags_all) == len(tokens_lists) == len(
+            sentence_list), f'predict_tags_all:{len(predict_tags_all)}, tokens_lists, sentence_lists not equal'
+        return predict_tags_all, tokens_lists, word_list_all
+
+    def __get_text_output(self, tokens_lists, predict_tags_all, sentence_ids):
+        grouped_tokens_list = []
+        grouped_predict_tags = []
+        temp_token_list = []
+        temp_predict_tags = []
+        pre = None
+        for i in range(len(sentence_ids)):
+            if sentence_ids[i] == pre:
+                temp_token_list.extend(tokens_lists[i])
+                temp_predict_tags.extend(predict_tags_all[i])
+            else:
+                if pre is None:
+                    temp_token_list.extend(tokens_lists[i])
+                    temp_predict_tags.extend(predict_tags_all[i])
+                    pre = sentence_ids[i]
+                else:
+                    grouped_predict_tags.temp_token_list(temp_predict_tags)
+                    grouped_tokens_list.temp_token_list(temp_token_list)
+                    temp_token_list = []
+                    temp_predict_tags = []
+
+        grouped_tokens_list.extend(temp_token_list)
+        grouped_predict_tags.extend(temp_predict_tags)
+        return grouped_tokens_list, grouped_predict_tags
+
+    def __get_ori_word_list(self, sentence_list, word_list_all, sentence_id_list):
+        new_word_lists = []
+        temp_word_list = []
+        pre = None
+        for i in range(len(sentence_id_list)):
+            sentence_id = sentence_id_list[i]
+            word_list = word_list_all[i]
+            sentence = sentence_list[i]
+            idx = 0
+            if sentence_id == pre:
+                for word in word_list:
+                    temp_word_list.append(sentence[idx:idx + len(word)])
+                    idx += len(word)
+            else:
+                if pre is None:
+                    for word in word_list:
+                        temp_word_list.append(sentence[idx:idx + len(word)])
+                        idx += len(word)
+                    pre = sentence_id
+                else:
+                    idx = 0
+                    new_word_lists.append(temp_word_list)
+                    temp_word_list = []
+                    for word in word_list:
+                        temp_word_list.append(sentence[idx:idx + len(word)])
+                        idx += len(word)
+                    pre = sentence_id
+        new_word_lists.append(temp_word_list)
+        return new_word_lists
 
     def predict(self, texts: 'str|list', return_words=False):
         if not texts:
@@ -352,51 +429,22 @@ class NER(object):
         if isinstance(texts, str):
             texts = [texts]
 
-        sentence_id = []
-        input_lists = []
-        for idx, text in enumerate(texts):
-            item = self.__make_input(text)
-            text = item.sent
-            text = t2s(text)
-            input_list = self.__cut_sentences(text)
-            input_lists.extend(input_list)
-            sentence_id.extend([idx]*len(input_list))
-        word_list = [self._cutword.cutword(sent) for sent in input_lists]
-        
-        input_tensors, seq_lens, input_lists = self.__encode(word_list)
-        input_tensors_batched_list, seq_lens_batched_list = self.__make_batch(
-            input_tensors, seq_lens)
-        predict_tags_all = []
-        for input_tensors_batched, seq_lens_batched in zip(input_tensors_batched_list, seq_lens_batched_list):
+        sentence_id_list, sentence_list = self._get_sent_list(texts)
 
-            predict_tags = self.__get_model_output(
-                input_tensors_batched,
-                seq_lens_batched,
-            )
-            predict_tags_all.extend(predict_tags)
+        predict_tags_all, tokens_lists, word_list_all = self._make_batch_encode_predict(
+            sentence_list)
+
+        grouped_tokens_list, grouped_predict_tags = self.__get_text_output(
+            tokens_lists, predict_tags_all, sentence_id_list)
         res = self.__predict_tags(
-            predict_tags_all, input_lists, texts, sentence_id)
-        
+            grouped_predict_tags, grouped_tokens_list, texts)
+
         if return_words:
-            words = []
-            cur_words = []
-            cur_sent_id = None
-            for sent_words, sent_id in zip(word_list, sentence_id):
-                if not cur_sent_id:
-                    cur_words.extend(sent_words)
-                    cur_sent_id = sent_id
-                elif cur_sent_id == sent_id:
-                    cur_words.extend(sent_words)
-                else:
-                    cur_sent_id = sent_id
-                    words.append(cur_words)
-                    cur_words = [w for w in sent_words]
-            
-            if cur_words:
-                words.append(cur_words)
-        
-            return res, words
-        return res
+            word_list_all = self.__get_ori_word_list(
+                sentence_list, word_list_all, sentence_id_list)
+            return res, word_list_all
+        else:
+            return res
 
     def __get_model_output(self, input_tensor, seq_lens):
         with torch.no_grad():
@@ -406,42 +454,31 @@ class NER(object):
             predict_tags = self._model.crf.decode(output_fc, mask)
         return predict_tags
 
-    def __predict_tags(self, predict_tags_all, input_lists, texts, sentence_id):
+    def __predict_tags(self, grouped_predict_tags, grouped_tokens_list, texts):
 
-        pre_idx = None
         results = []
-        result = []
-        chars_len = 0
-        for i in range(len(sentence_id)):
-
-            pre = predict_tags_all[i]
-            # pre = pre.cpu().tolist()
-            chars = input_lists[i]
-            idx = sentence_id[i]
-            text = texts[idx]
+        for i in range(len(texts)):
+            result = []
+            chars_len = 0
+            predict_tags = grouped_predict_tags[i]
+            tokens_list = grouped_tokens_list[i]
+            text = texts[i]
             text_simple = t2s(text)
             text_simple = text_simple.lower()
             text_simple = self.__digit_alpha_map(text_simple)
-            if idx == pre_idx:
+            predict_tags = [self._id2label[t] for t in predict_tags]
+            pre_result = self.__decode_prediction(
+                tokens_list, predict_tags, chars_len, text, text_simple)
+            result.extend(pre_result)
 
-                # for pre, chars in zip(predict_tags, input_lists):
-                pre = [self._id2label[t] for t in pre]
-                pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
-                result.extend(pre_result)
-                chars_len += len(chars)
-            else:
-                if pre_idx is not None:
-                    results.append(result)
-                pre_idx = idx
-
-                pre = [self._id2label[t] for t in pre]
-                pre_result = self.__decode_prediction(chars, pre, chars_len, text, text_simple)
-                result = pre_result
-                chars_len = len(chars)
-
-        if result:
-            results.append(result)
+        results.append(result)
         return results
+
+    def __get_normalize_sent(self, sent):
+        sent_normalized = sent.lower()
+        sent_normalized = self.__digit_alpha_map(sent_normalized)
+        sent_normalized = t2s(sent_normalized)
+        return sent_normalized
 
     def __encode(self, words_list: "list[list[str]]"):
         input_tensors = []
@@ -461,25 +498,19 @@ class NER(object):
                     else:
                         for char in word:
                             input_list.append(char)
-            # print('input_list:', input_list)
 
             input_tensor = []
             for char in input_list:
-                if char == '[SEP]':
-                    continue
                 if self._char2id.get(char):
                     input_tensor.append(self._char2id[char])
                 else:
                     if self._is_digit(char):
                         input_tensor.append(self._char2id['[NUMBER]'])
-                    elif self.__is_special_token(char):
-                        input_tensor.append(self._char2id['[EWORD]'])
                     elif self._is_hanzi(char):
                         input_tensor.append(self._char2id['[HANZI]'])
                     else:
                         input_tensor.append(self._char2id['[UNK]'])
-    
-                
+
             seq_len = len(input_tensor)
 
             input_tensors.append(torch.tensor(input_tensor))
@@ -488,7 +519,7 @@ class NER(object):
         input_tensors = pad_sequence(
             input_tensors, batch_first=True, padding_value=0)
         return torch.tensor(input_tensors), torch.tensor(seq_lens), input_lists
-                
+
     def __decode_prediction(self, chars, tags, chars_len, text, text_simple):
         new_chars = []
         for char in chars:
@@ -509,10 +540,10 @@ class NER(object):
             head = tag.split('_')[0]
             label = tag.split('_')[-1]
             if "S" in head:
-                
-                temp.entity = char 
-                temp.begin = idx 
-                temp.end = idx+char_len 
+
+                temp.entity = char
+                temp.begin = idx
+                temp.end = idx+char_len
                 temp.ner_type_en = label
                 temp.ner_type_zh = self._label_en2zh[label]
                 while text_simple[temp.begin:temp.end] != temp.entity and temp.end < len(text):
@@ -544,7 +575,7 @@ class NER(object):
                     continue
                 else:
                     temp.entity += char
-                    temp.end = idx + char_len 
+                    temp.end = idx + char_len
                     while text_simple[temp.begin:temp.end] != temp.entity and temp.end < len(text):
                         temp.begin += 1
                         temp.end += 1
@@ -563,12 +594,12 @@ if __name__ == '__main__':
 
     print(root_path)
     # ner_model = NER()
-    ner_model = NER(model_path='/data/cutword/cutword/model_params.pth',preprocess_data_path='/data/cutword/cutword/ner_vocab_tags.json')
+    ner_model = NER(model_path='/data/cutword/cutword/model_params.pth',
+                    preprocess_data_path='/data/cutword/cutword/ner_vocab_tags.json')
     sentence_list = []
-    a = '炊事员玛钦次旦'
+    a = '蘇恩曦Jack和酒德麻衣rose神色凝重地走向大廳。'
+    res, word_list = ner_model.predict(a, return_words=True)
+    print(res)
+    print(word_list)
     # for _ in range(10):
     #     sentence_list.append(a)
-
-    result = ner_model.predict(a)
-
-    print(result)
