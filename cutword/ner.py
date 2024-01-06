@@ -8,8 +8,12 @@ from torch.nn.utils.rnn import pad_sequence
 lstm+crf，训练得到的最好macro-f1是0.686。
 '''
 import json
-from .model_ner import LstmNerModel
-from .cutword import Cutter
+try:
+    from .model_ner import LstmNerModel
+    from .cutword import Cutter
+except:
+    from model_ner import LstmNerModel
+    from cutword import Cutter
 from typing import List
 import os
 import math
@@ -184,7 +188,7 @@ class NER(object):
 
         if deduplicate:
             para = re.sub(r"([。！？\!\?;；])\1+", r"\1", para)
-        para = re.sub(r'\s+', '\n', para)
+        para = re.sub(r'(\s+)\1', r'\n\1\n', para)
         para = re.sub(r'([。！？\?!])([^”’])', r"\1\n\2", para)  # 单字符断句符
         para = re.sub(r'(\.{3,6})([^”’])', r"\1\n\2", para)  # 英文省略号
         para = re.sub(r'(\…{2})([^”’])', r"\1\n\2", para)  # 中文省略号
@@ -402,8 +406,9 @@ class NER(object):
                 else:
                     grouped_predict_tags.append(temp_predict_tags)
                     grouped_tokens_list.append(temp_token_list)
-                    temp_token_list = []
-                    temp_predict_tags = []
+                    temp_token_list = tokens_lists[i]
+                    temp_predict_tags = predict_tags_all[i]
+                    pre = sentence_ids[i]
 
         grouped_tokens_list.append(temp_token_list)
         grouped_predict_tags.append(temp_predict_tags)
@@ -643,7 +648,9 @@ if __name__ == '__main__':
 
 
     '''
-    res, word_list = ner_model.predict(a, return_words=True)
+    sents =  ['布莱恩科比，是世界文明的篮球巨星。', '世事无常，令人感到挽惜的是，科比因为飞机事故原因已经离开了人世，一代巨星的陨落，让整个篮球界都感到非常很悲伤。', '科比一生己经为湖人队效力了20个赛季，在这20个赛季中，科比将曼巴精神演艺到了极致，带着伤病坚持比赛.科比精神不但激励大家，而且鼓舞人心。', '他与湖人队签订了一份为期两年价值4850万美元的续约合同，这将使他成为第一位为同一支球队效力达到20年的NBA球员，。', '2014年3月12日，湖人队宣布科比2013-14赛季报销。', '2014-15赛季，科比复出征战他代表湖人队的弟19个赛季。', '2014年11月30日，在一场 129-122加时赛击败多伦多猛龙队的比赛中，科比得到了生涯第20次三双，31分，12次助攻以及11个篮板。', '在36岁的年纪，他成为NBA得到30分，10个篮板，10次助攻的最年长球员，这是全世界的创举一个。', '如果说篮球是一座链接世界的桥，那么科比就是这座桥的其中一个桥礅。']
+    sents =  ['2014年11月30日，在一场 129-122加时赛击败多伦多猛龙队的比赛中，科比得到了生涯第20次三双，31分，12次助攻以及11个篮板。']
+    res, word_list = ner_model.predict(sents, return_words=True)
     print(res)
     print(word_list)
     # for _ in range(10):
