@@ -400,8 +400,8 @@ class NER(object):
                     temp_predict_tags.extend(predict_tags_all[i])
                     pre = sentence_ids[i]
                 else:
-                    grouped_predict_tags.temp_token_list(temp_predict_tags)
-                    grouped_tokens_list.temp_token_list(temp_token_list)
+                    grouped_predict_tags.append(temp_predict_tags)
+                    grouped_tokens_list.append(temp_token_list)
                     temp_token_list = []
                     temp_predict_tags = []
 
