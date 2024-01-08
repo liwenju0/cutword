@@ -1,5 +1,5 @@
 
-![image](https://github.com/liwenju0/cutword/assets/16049564/512b6337-531a-4a28-94b2-11e99d2dae04)
+
 
 
 jieba 不维护了，所以有了cutword。
