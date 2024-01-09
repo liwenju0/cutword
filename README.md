@@ -1,3 +1,4 @@
+![cutword](https://github.com/liwenju0/cutword/assets/16049564/7236459c-50c0-4031-a83f-b0b54975d7f0)
 
 
 
