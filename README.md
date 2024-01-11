@@ -1,8 +1,3 @@
-![cutword](https://github.com/liwenju0/cutword/assets/16049564/7236459c-50c0-4031-a83f-b0b54975d7f0)
-
-
-
-
 jieba 不维护了，所以有了cutword。
 
 本项目充分借鉴了苏神的bytepiece的代码，在此表示感谢。
