@@ -67,6 +67,7 @@ class Cutter:
         scores = [0] + [inf] * len(text)
         routes = list(range(len(text) + 1))
         tokens = []
+        e = -inf # fix unbound local error
         for e, (k, v, p) in self._automaton.iter(text):
             s, e = e - k + 1, e + 1
             if scores[s] == inf:
@@ -81,9 +82,14 @@ class Cutter:
             if score > scores[e]:
                 scores[e], routes[e] = score, s
 
+        if e < 0:
+            tokens.append(text)
+            return tokens
+        
         if e < len(text):
             tokens.append(text[e:])
             text = text[:e]
+        
 
         while text:
             s = routes[e]
