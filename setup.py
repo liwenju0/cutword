@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cutword',
-    version='0.0.12',
+    version='0.0.14',
     python_requires='>=3',
     description='Just Cut Word Faster',
     long_description=open('README.md', encoding="utf-8").read(),

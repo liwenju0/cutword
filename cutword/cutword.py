@@ -48,7 +48,7 @@ class Cutter:
 
     def _load_dict(self, file_path):
         print("Loading dictionaries from %s" % file_path)
-        for line in open(file_path):
+        for line in open(file_path, encoding="utf8"):
             line = line.strip()
             r = line.split()
             if len(r) >= 2:
