@@ -1,7 +1,11 @@
 jieba不维护了，所以有了cutword。
+
 cutword 是一个中文分词库，字典文件根据最新数据统计得到，词频更加合理。
+
 分词速度是jieba的两倍。
 可通过 python -m cutword.comparewithjieba 进行测试。
+
+Note：本项目并不支持英文实体的识别。如需要英文实体的识别，推荐使用nltk。
 
 # 1、安装：
 ```
