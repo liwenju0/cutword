@@ -67,7 +67,7 @@ class Cutter:
         scores = [0] + [inf] * len(text)
         routes = list(range(len(text) + 1))
         tokens = []
-        e = -inf # fix unbound local error
+        e = -1 # fix unbound local error
         for e, (k, v, p) in self._automaton.iter(text):
             s, e = e - k + 1, e + 1
             if scores[s] == inf:
