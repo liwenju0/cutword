@@ -1,18 +1,15 @@
-jieba 不维护了，所以有了cutword。
-
-本项目充分借鉴了苏神的bytepiece的代码，在此表示感谢。
-
-https://github.com/bojone/bytepiece
-
+jieba不维护了，所以有了cutword。
 
 cutword 是一个中文分词库，字典文件根据最新数据统计得到，词频更加合理。
 
 分词速度是jieba的两倍。
 可通过 python -m cutword.comparewithjieba 进行测试。
 
+Note：本项目并不支持英文实体的识别。如需要英文实体的识别，推荐使用nltk。
+
 # 1、安装：
 ```
-pip install cutword
+pip install -U cutword
 ```
 
 # 2、使用：
@@ -42,6 +39,7 @@ res = cutter.cutword("精诚所至，金石为开")
 print(res) # ['精诚所至', '，', '金石为开']
 
 ```
+初始化Cutter时，支持传入用户自定义的词典，词典格式需要和本项目的dict文件保持一致，词典中的词性一列，暂时没有使用，可随意填写。
 
 ## 2.2命名实体识别
 
@@ -52,7 +50,11 @@ from pprint import pprint
 from  cutword import NER
 
 ner = NER()
-res = ner.predict("奈雪的茶，新茶饮赛道开创者，创立于2015年，推出“茶饮+软欧包”双品类模式。聚焦以茶为核心的现代生活方式，奈雪已形成“现制茶饮”、“奈雪茗茶”及“RTD瓶装茶”三大业务版块，成功打造“霸气玉油柑”、“鸭屎香宝藏茶”等多款行业经典产品。", return_words=False)
+res = ner.predict(
+  "奈雪的茶，新茶饮赛道开创者，创立于2015年，推出“茶饮+软欧包”双品类模式。聚焦以茶为核心的现代生活方式，奈雪已形成“现制茶饮”、“奈雪茗茶”及“RTD瓶装茶”三大业务版块，成功打造“霸气玉油柑”、“鸭屎香宝藏茶”等多款行业经典产品。",
+  return_words=False
+)
+# 如果需要分词结果，可将return_words设为True。返回的是(res, words)
 pprint(res) 
 '''
 [[NERItem(entity='奈雪的茶', begin=0, end=4, ner_type_en='COMMERCIAL', ner_type_zh='商业'),
@@ -92,7 +94,9 @@ pprint(res)
 | 16 | PERSON | 人名 |
 | 17 | TERMINOLOGY | 领域术语 |
 
+本项目是[匠数科技](https://www.deepctrl.net)根据多年业务积累开发的NLP基础工具。匠数科技是一家专注于内容安全领域的国家高新技术企业。可以对大模型输出内容、各类网站、媒体进行安全性检测并生成检测报告。
 
+本项目借鉴了苏神的[bytepiece](https://github.com/bojone/bytepiece)的代码，在此表示感谢。
 
 
 ## Star History
