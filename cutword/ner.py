@@ -443,12 +443,19 @@ class NER(object):
                     pre = sentence_id
         new_word_lists.append(temp_word_list)
         return new_word_lists
-
-    def predict(self, texts: 'str|list', return_words=False):
+    
+    def _is_empty(self, texts):
         if not texts:
-            return []
+            return True 
         if isinstance(texts, list) and all(not a for a in texts):
-            return []
+            return True
+        return  False
+        
+    def predict(self, texts: 'str|list', return_words=False):
+        if self._is_empty(texts):
+            if not return_words:
+                return []
+            return [], []
 
         if isinstance(texts, str):
             texts = [texts]
