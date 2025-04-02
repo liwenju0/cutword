@@ -1,6 +1,5 @@
 
 ![cutword](./cutword-logo.png)
-(made by gpt4o)
 
 
 **jieba不维护了，所以有了cutword。**
