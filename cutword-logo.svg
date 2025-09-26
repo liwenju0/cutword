@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2E5BBA;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="100" cy="100" r="90" fill="url(#gradient)" stroke="#1E3A8A" stroke-width="2"/>
+  
+  <!-- 中文文本示例 -->
+  <text x="100" y="60" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">中文分词</text>
+  
+  <!-- 分词切割线 -->
+  <line x1="40" y1="80" x2="160" y2="80" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <line x1="60" y1="90" x2="140" y2="90" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- 分词结果展示 -->
+  <rect x="50" y="100" width="20" height="15" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <text x="60" y="110" font-family="Arial, sans-serif" font-size="10" fill="#000000" text-anchor="middle">词</text>
+  
+  <rect x="80" y="100" width="20" height="15" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <text x="90" y="110" font-family="Arial, sans-serif" font-size="10" fill="#000000" text-anchor="middle">分</text>
+  
+  <rect x="110" y="100" width="20" height="15" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <text x="120" y="110" font-family="Arial, sans-serif" font-size="10" fill="#000000" text-anchor="middle">割</text>
+  
+  <rect x="140" y="100" width="20" height="15" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+  <text x="150" y="110" font-family="Arial, sans-serif" font-size="10" fill="#000000" text-anchor="middle">器</text>
+  
+  <!-- 命名实体识别标签 -->
+  <rect x="50" y="130" width="30" height="12" fill="#FF6B6B" stroke="#FF4444" stroke-width="1" rx="2"/>
+  <text x="65" y="138" font-family="Arial, sans-serif" font-size="8" fill="#FFFFFF" text-anchor="middle">人名</text>
+  
+  <rect x="90" y="130" width="30" height="12" fill="#4ECDC4" stroke="#45B7B8" stroke-width="1" rx="2"/>
+  <text x="105" y="138" font-family="Arial, sans-serif" font-size="8" fill="#FFFFFF" text-anchor="middle">组织</text>
+  
+  <rect x="130" y="130" width="30" height="12" fill="#45B7D1" stroke="#3A9BC1" stroke-width="1" rx="2"/>
+  <text x="145" y="138" font-family="Arial, sans-serif" font-size="8" fill="#FFFFFF" text-anchor="middle">时间</text>
+  
+  <!-- 连接线显示实体识别 -->
+  <line x1="65" y1="130" x2="65" y2="120" stroke="#FF6B6B" stroke-width="2"/>
+  <line x1="105" y1="130" x2="105" y2="120" stroke="#4ECDC4" stroke-width="2"/>
+  <line x1="145" y1="130" x2="145" y2="120" stroke="#45B7D1" stroke-width="2"/>
+  
+  <!-- 底部标识 -->
+  <text x="100" y="170" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="url(#textGradient)" text-anchor="middle">cutword</text>
+</svg>

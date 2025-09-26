@@ -1,5 +1,5 @@
 
-![cutword](./cutword-logo.png)
+![cutword](./cutword-logo.svg)
 
 
 **jieba不维护了，所以有了cutword。**
